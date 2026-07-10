@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="#FFFFFF" stroke="#F5F5F5" stroke-width="4"/>
+  
+  <!-- Text Styling -->
+  <style>
+    .bold-text {
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'NanumGothic', 'Noto Sans CJK KR', sans-serif;
+      font-weight: 900;
+      fill: #0B1330;
+      text-anchor: middle;
+    }
+    .main-korean {
+      font-size: 110px;
+      letter-spacing: 4px;
+    }
+    .english-sub {
+      font-family: 'Inter', 'Segoe UI', 'Arial', sans-serif;
+      font-weight: 800;
+      font-size: 26px;
+      fill: #0B1330;
+      text-anchor: middle;
+      letter-spacing: 4px;
+    }
+    .korean-sub {
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'NanumGothic', 'Noto Sans CJK KR', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      fill: #0B1330;
+      text-anchor: middle;
+      letter-spacing: 2.2px;
+    }
+  </style>
+
+  <!-- Top Korean Text "학장" -->
+  <text x="256" y="170" class="bold-text main-korean">학장</text>
+
+  <!-- English Text "HAKJANGCHURCH" -->
+  <text x="258" y="240" class="english-sub">HAKJANGCHURCH</text>
+
+  <!-- Subtitle Text "예수교장로회 한국총공회" -->
+  <text x="256" y="282" class="korean-sub">예수교장로회 한국총공회</text>
+
+  <!-- Bottom Korean Text "교회" -->
+  <text x="256" y="410" class="bold-text main-korean">교회</text>
+</svg>

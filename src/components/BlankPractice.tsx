@@ -121,7 +121,7 @@ export default function BlankPractice({ verse, onComplete, onBack }: BlankPracti
         <label className="block text-xs font-semibold text-[#A0A090] uppercase tracking-wider mb-2.5">
           빈칸 난이도 선택
         </label>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             { label: '쉬움 (20%)', value: 20 },
             { label: '보통 (40%)', value: 40 },

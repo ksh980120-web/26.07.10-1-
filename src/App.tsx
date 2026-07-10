@@ -300,6 +300,11 @@ export default function App() {
     };
   }, []);
 
+  // Scroll to top on any view or main tab transition (crucial for mobile UX)
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeView, activeMainTab, showManager, showPastorPanel]);
+
   const goBack = () => {
     if (showManager) {
       setShowManager(false);
@@ -332,6 +337,33 @@ export default function App() {
   const saveGongGwaLessons = (updatedGongGwa: GongGwa[]) => {
     setGongGwaLessons(updatedGongGwa);
     localStorage.setItem('hagah_gonggwa_lessons', JSON.stringify(updatedGongGwa));
+  };
+
+  // Find a verse by ID from either the main verses list or GongGwa lesson verses list
+  const findVerseById = (id: string | null): Verse | undefined => {
+    if (!id) return undefined;
+    
+    // 1. Search in main verses
+    const mainVerse = verses.find(v => v.id === id);
+    if (mainVerse) return mainVerse;
+
+    // 2. Search in GongGwa lessons
+    for (const lesson of gongGwaLessons) {
+      const gv = lesson.verses.find(v => v.id === id);
+      if (gv) {
+        return {
+          id: gv.id,
+          reference: gv.reference,
+          text: gv.text,
+          quarter: 0,
+          week: 0,
+          hint: gv.hint || '',
+          isCustom: true
+        };
+      }
+    }
+
+    return undefined;
   };
 
   // --- CORE LOGIC & ACTIONS ---
@@ -503,7 +535,7 @@ export default function App() {
     if (!selectedVerseId) return;
 
     // Save test attempt
-    const targetVerse = verses.find(v => v.id === selectedVerseId);
+    const targetVerse = findVerseById(selectedVerseId);
     if (targetVerse) {
       const newAttempt: TestAttempt = {
         id: `attempt-${Date.now()}`,
@@ -552,7 +584,7 @@ export default function App() {
   const handleWriteComplete = (score: number, userText: string) => {
     if (!selectedVerseId) return;
 
-    const targetVerse = verses.find(v => v.id === selectedVerseId);
+    const targetVerse = findVerseById(selectedVerseId);
     if (targetVerse) {
       const newAttempt: TestAttempt = {
         id: `attempt-${Date.now()}`,
@@ -612,7 +644,7 @@ export default function App() {
   const handleSpeakComplete = (score: number) => {
     if (!selectedVerseId) return;
 
-    const targetVerse = verses.find(v => v.id === selectedVerseId);
+    const targetVerse = findVerseById(selectedVerseId);
     if (targetVerse) {
       const newAttempt: TestAttempt = {
         id: `attempt-${Date.now()}`,
@@ -827,19 +859,19 @@ export default function App() {
         {/* VIEW CONDITIONAL RENDERING */}
         {activeView === 'blank_practice' && selectedVerseId ? (
           <BlankPractice
-            verse={verses.find(v => v.id === selectedVerseId)!}
+            verse={findVerseById(selectedVerseId)!}
             onComplete={handleBlankComplete}
             onBack={goBack}
           />
         ) : activeView === 'write_test' && selectedVerseId ? (
           <WriteTest
-            verse={verses.find(v => v.id === selectedVerseId)!}
+            verse={findVerseById(selectedVerseId)!}
             onComplete={handleWriteComplete}
             onBack={goBack}
           />
         ) : activeView === 'speak_along' && selectedVerseId ? (
           <SpeakAlong
-            verse={verses.find(v => v.id === selectedVerseId)!}
+            verse={findVerseById(selectedVerseId)!}
             onComplete={handleSpeakComplete}
             onBack={goBack}
           />

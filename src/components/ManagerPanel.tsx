@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit3, Share2, FileSpreadsheet, Copy, Check, UploadCloud, X, HelpCircle, Users, Award, Printer, Trophy, RotateCcw, Calendar, TrendingUp, BookOpen, Layers } from 'lucide-react';
-import { Verse, GongGwa } from '../types';
+import { Plus, Trash2, Edit3, Share2, FileSpreadsheet, Copy, Check, UploadCloud, X, HelpCircle, Users, Award, Printer, Trophy, RotateCcw, Calendar, TrendingUp, BookOpen, Layers, Heart } from 'lucide-react';
+import { Verse, GongGwa, AnonymousPrayer } from '../types';
 import PastorAdminPanel from './PastorAdminPanel';
 
 // Helper: Calculate Quarter and Week from Date (e.g., "2026.07.12", "2026-07-12")
@@ -116,6 +116,10 @@ interface ManagerPanelProps {
   userRole?: 'pastor' | 'manager';
   gongGwaLessons: GongGwa[];
   onUpdateGongGwaLessons: (lessons: GongGwa[]) => void;
+  prayers: AnonymousPrayer[];
+  onDeletePrayer: (id: string) => void;
+  onTogglePrayerStatus: (id: string) => void;
+  onUpdatePrayer?: (id: string, updatedFields: Partial<AnonymousPrayer>) => void;
 }
 
 export default function ManagerPanel({
@@ -132,12 +136,23 @@ export default function ManagerPanel({
   onPinMonthVerse,
   userRole = 'pastor',
   gongGwaLessons = [],
-  onUpdateGongGwaLessons
+  onUpdateGongGwaLessons,
+  prayers = [],
+  onDeletePrayer,
+  onTogglePrayerStatus,
+  onUpdatePrayer
 }: ManagerPanelProps) {
   // Navigation / Tab state for the right column
-  const [rightTab, setRightTab] = useState<'groups' | 'bulletin' | 'saints' | 'gonggwa_manage'>(
+  const [rightTab, setRightTab] = useState<'groups' | 'prayers_manage' | 'saints' | 'gonggwa_manage'>(
     userRole === 'manager' ? 'gonggwa_manage' : 'groups'
   );
+
+  // Prayer management states
+  const [editingPrayerId, setEditingPrayerId] = useState<string | null>(null);
+  const [editPrayerTitle, setEditPrayerTitle] = useState('');
+  const [editPrayerContent, setEditPrayerContent] = useState('');
+  const [editPrayerCategory, setEditPrayerCategory] = useState<'family' | 'health' | 'faith' | 'career' | 'others'>('faith');
+  const [deletePrayerConfirmId, setDeletePrayerConfirmId] = useState<string | null>(null);
 
   // GongGwa content management states
   const [editingGongGwaId, setEditingGongGwaId] = useState<string | null>(null);
@@ -519,6 +534,15 @@ export default function ManagerPanel({
           <div className="flex border border-[#E9E3D8] gap-1 bg-[#F5F5F0] p-1.5 rounded-2xl shadow-inner flex-wrap">
             <button
               type="button"
+              onClick={() => setRightTab('gonggwa_manage')}
+              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'gonggwa_manage' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-[#8A9A5B]" />
+              공과 내용 관리
+            </button>
+
+            <button
+              type="button"
               onClick={() => setRightTab('groups')}
               className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'groups' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
             >
@@ -528,33 +552,20 @@ export default function ManagerPanel({
             
             <button
               type="button"
-              onClick={() => setRightTab('gonggwa_manage')}
-              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'gonggwa_manage' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
+              onClick={() => setRightTab('prayers_manage')}
+              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'prayers_manage' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
             >
-              <BookOpen className="w-3.5 h-3.5 text-[#8A9A5B]" />
-              공과 내용 관리
+              <Heart className="w-3.5 h-3.5 text-[#8A9A5B]" />
+              중보기도 관리
             </button>
-
-            {userRole === 'pastor' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setRightTab('bulletin')}
-                  className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'bulletin' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
-                >
-                  <Award className="w-3.5 h-3.5 text-[#8A9A5B]" />
-                  주간 말씀 권면
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRightTab('saints')}
-                  className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'saints' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
-                >
-                  <TrendingUp className="w-3.5 h-3.5 text-[#8A9A5B]" />
-                  성도 성과 관리
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => setRightTab('saints')}
+              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'saints' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-[#8A9A5B]" />
+              성도 성과 관리
+            </button>
           </div>
 
           {/* Tab 1: Groups (소그룹 말씀 나눔 질문지 생성기) */}
@@ -942,107 +953,175 @@ export default function ManagerPanel({
             </div>
           )}
 
-          {/* Tab 2: Bulletin Word Message Generator */}
-          {rightTab === 'bulletin' && (
+          {/* Tab 2: Anonymous Prayer Request Management */}
+          {rightTab === 'prayers_manage' && (
             <div className="space-y-4 bg-white p-5 rounded-2xl border border-[#E9E3D8] shadow-sm">
-              <h4 className="text-xs font-bold text-[#5A5A40] uppercase tracking-wider flex items-center gap-1.5">
-                <Award className="w-4 h-4 text-[#8A9A5B]" />
-                목회자 주간 말씀 권면 & 카톡 알림 생성기
-              </h4>
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-[#5A5A40] uppercase tracking-wider flex items-center gap-1.5">
+                  <Heart className="w-4 h-4 text-[#8A9A5B] fill-[#8A9A5B]/10" />
+                  익명 중보기도 요청 관리 및 모니터링
+                </h4>
+                <span className="text-[10px] text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full font-bold">
+                  총 {prayers.length}건
+                </span>
+              </div>
               <p className="text-[11px] text-[#7A7A6A] leading-relaxed">
-                주일 강단에서 선포된 이번 주 성경 구절과 따뜻한 목회 권면을 가득 담은 성도 발송용 카카오톡/문자 메시지를 클릭 한 번으로 손쉽게 생성해 보세요!
+                성도님들이 올리신 익명 중보기도 요청을 실시간으로 확인하고 보살필 수 있습니다. 
+                기도의 응답이 이루어진 경우 <strong>[응답 완료]</strong>를 설정하면 성도들의 화면에 축하 배너가 함께 표시되며, 부적절한 내용은 신속히 삭제하여 은혜롭고 건강한 나눔판을 유지해 주십시오.
               </p>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-[#5A5A40] mb-1">성구 구절 선택</label>
-                  <select
-                    value={selectedBulletinVerseId}
-                    onChange={(e) => setSelectedBulletinVerseId(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-lg border border-[#E9E3D8] bg-[#FDFBF7] text-[#4A4A4A] font-semibold"
-                  >
-                    {verses.map(v => (
-                      <option key={v.id} value={v.id}>
-                        {v.quarter}분기 {v.week}주차: {v.reference}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-[#5A5A40] mb-1">권면 테마/어조</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setBulletinTone('comfort')}
-                      className={`py-2 text-[10px] font-extrabold rounded-lg transition border cursor-pointer ${bulletinTone === 'comfort' ? 'bg-[#5A5A40] border-[#5A5A40] text-white' : 'bg-[#FDFBF7] border-[#E9E3D8] text-[#7A7A6A] hover:bg-stone-50'}`}
-                    >
-                      🌱 위로와 평안
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBulletinTone('courage')}
-                      className={`py-2 text-[10px] font-extrabold rounded-lg transition border cursor-pointer ${bulletinTone === 'courage' ? 'bg-[#5A5A40] border-[#5A5A40] text-white' : 'bg-[#FDFBF7] border-[#E9E3D8] text-[#7A7A6A] hover:bg-stone-50'}`}
-                    >
-                      🔥 용기와 믿음
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBulletinTone('grace')}
-                      className={`py-2 text-[10px] font-extrabold rounded-lg transition border cursor-pointer ${bulletinTone === 'grace' ? 'bg-[#5A5A40] border-[#5A5A40] text-white' : 'bg-[#FDFBF7] border-[#E9E3D8] text-[#7A7A6A] hover:bg-stone-50'}`}
-                    >
-                      ✨ 감사와 은혜
-                    </button>
+              <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                {prayers.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-stone-200 rounded-xl">
+                    <p className="text-xs text-stone-400 font-bold">현재 등록된 중보기도 제목이 없습니다.</p>
                   </div>
-                </div>
+                ) : (
+                  prayers.map((prayer) => {
+                    const isEditing = editingPrayerId === prayer.id;
+                    return (
+                      <div
+                        key={prayer.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          prayer.status === 'answered'
+                            ? 'bg-amber-50/20 border-amber-200'
+                            : 'bg-stone-50/50 border-stone-200'
+                        }`}
+                      >
+                        {isEditing ? (
+                          <div className="space-y-3 animate-fadeIn">
+                            <div>
+                              <label className="block text-[9px] font-bold text-stone-500 mb-0.5">제목 (최대 40자)</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={40}
+                                value={editPrayerTitle}
+                                onChange={(e) => setEditPrayerTitle(e.target.value)}
+                                className="w-full text-xs p-2 rounded-lg border border-stone-200 bg-white text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 font-bold"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-stone-500 mb-0.5">분야</label>
+                                <select
+                                  value={editPrayerCategory}
+                                  onChange={(e) => setEditPrayerCategory(e.target.value as any)}
+                                  className="w-full text-xs p-1.5 rounded-lg border border-stone-200 bg-white text-stone-800"
+                                >
+                                  <option value="faith">신앙 / 영성</option>
+                                  <option value="health">건강 / 치유</option>
+                                  <option value="family">가정 / 자녀</option>
+                                  <option value="career">학업 / 취업 / 직장</option>
+                                  <option value="others">기타 소원</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-stone-500 mb-0.5">기도 내용</label>
+                              <textarea
+                                required
+                                rows={3}
+                                maxLength={500}
+                                value={editPrayerContent}
+                                onChange={(e) => setEditPrayerContent(e.target.value)}
+                                className="w-full text-xs p-2 rounded-lg border border-stone-200 bg-white text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 leading-relaxed"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPrayerId(null)}
+                                className="flex-1 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-bold rounded-lg transition"
+                              >
+                                취소
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onUpdatePrayer) {
+                                    onUpdatePrayer(prayer.id, {
+                                      title: editPrayerTitle.trim(),
+                                      content: editPrayerContent.trim(),
+                                      category: editPrayerCategory,
+                                    });
+                                  }
+                                  setEditingPrayerId(null);
+                                }}
+                                className="flex-1 py-1.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-[10px] font-bold rounded-lg transition"
+                              >
+                                저장하기
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[9.5px] font-black bg-stone-100 border border-stone-200 text-stone-600 px-1.5 py-0.2 rounded">
+                                  {prayer.category === 'family' ? '가정' :
+                                   prayer.category === 'health' ? '건강' :
+                                   prayer.category === 'faith' ? '신앙' :
+                                   prayer.category === 'career' ? '학업/취업' : '기타'}
+                                </span>
+                                <span className="text-[9.5px] text-stone-400 font-mono">
+                                  {prayer.date} · 익명
+                                </span>
+                                <span className="text-[9.5px] text-[#8A9A5B] bg-white border border-[#8A9A5B]/20 px-1.5 py-0.2 rounded font-bold">
+                                  ♥ {prayer.amenCount}명 동참
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-[#4A4A4A]">
+                                {prayer.title}
+                              </h5>
+                              <p className="text-[10.5px] text-[#6A6A5A] leading-relaxed whitespace-pre-wrap font-sans bg-white p-2.5 rounded-lg border border-stone-100">
+                                {prayer.content}
+                              </p>
+                            </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-[#5A5A40] mb-1">추가 목회 권면 내용 (선택)</label>
-                  <textarea
-                    value={customPastorMessage}
-                    onChange={(e) => setCustomPastorMessage(e.target.value)}
-                    placeholder="목사님의 개인적인 주간 인사말이나 교회 소식을 더 추가해 성도님들께 보낼 수 있습니다."
-                    rows={2}
-                    className="w-full text-[10.5px] p-2.5 rounded-lg border border-[#E9E3D8] bg-[#FDFBF7] text-[#4A4A4A] placeholder-[#A0A090] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
-                  />
-                </div>
+                            {/* Action buttons */}
+                            <div className="flex flex-col gap-1.5 shrink-0 pt-1 w-[100px]">
+                              <button
+                                type="button"
+                                onClick={() => onTogglePrayerStatus(prayer.id)}
+                                className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition cursor-pointer text-center ${
+                                  prayer.status === 'answered'
+                                    ? 'bg-[#5A5A40] border-[#5A5A40] text-white hover:bg-[#4A4A30]'
+                                    : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                                }`}
+                              >
+                                {prayer.status === 'answered' ? '다시 기도 중' : '🎉 응답 완료'}
+                              </button>
+                              
+                              {onUpdatePrayer && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPrayerId(prayer.id);
+                                    setEditPrayerTitle(prayer.title);
+                                    setEditPrayerContent(prayer.content);
+                                    setEditPrayerCategory(prayer.category as any);
+                                  }}
+                                  className="px-2 py-1.5 bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 rounded-lg text-[10px] font-bold transition cursor-pointer text-center"
+                                >
+                                  ✏️ 내용 수정
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setDeletePrayerConfirmId(prayer.id)}
+                                className="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-lg text-[10px] font-bold transition cursor-pointer text-center"
+                              >
+                                ❌ 삭제하기
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
-
-              {/* Message preview inside card */}
-              {(() => {
-                const targetVerse = verses.find(v => v.id === selectedBulletinVerseId) || verses[0];
-                if (!targetVerse) return null;
-
-                const toneText = {
-                  comfort: `주님의 은혜와 동행하는 복된 삶이 되시길 기도합니다. 환난과 곤고 속에서도 주의 약속을 온전히 묵상하며 마음에 크신 영적 평안을 품어보세요. 주님은 영원한 피난처이십니다.`,
-                  courage: `우리는 오직 은혜의 믿음으로 세상을 넉넉히 이기는 주님의 군사입니다. 눈앞의 일시적인 문제에 위축되지 마시고, 주님의 능력의 오른손을 의지하며 이번 주 한 주도 용감히 발걸음을 내딛읍시다!`,
-                  grace: `매일 아침 내려주시는 만나처럼, 하나님의 신실하신 은혜는 언제나 무한합니다. 우리의 입술과 삶 전체가 주님의 은총을 향한 감사의 찬송으로 넘쳐나는 영광스러운 일주일이 되시기를 진심으로 축복합니다.`
-                }[bulletinTone];
-
-                const fullMessage = `🍞 [학장교회 만나 말씀배달]\n"하나님과 만나는 달콤한 시간"\n\n사랑하는 학장교회 성도님,\n주일 강단의 은혜로운 말씀 암송 구절을 배달해 드립니다.\n\n📖 말씀: ${targetVerse.reference}\n✍️ 본문: "${targetVerse.text}"\n\n💬 목회 권면:\n${toneText}\n\n${customPastorMessage ? `⛪ 주간 소식:\n${customPastorMessage}\n\n` : ''}📲 모바일 말씀 트레이너 '만나'에 접속해 입체 암송 훈련에 바로 참여해 보세요!\n👉 접속하기: https://manna.hachang.org\n\n"말씀중심 은혜중심" - 학장교회 담임목사 김인수 드림`;
-
-                const handleCopyBulletinText = () => {
-                  navigator.clipboard.writeText(fullMessage);
-                  setCopiedBulletinText(true);
-                  setTimeout(() => setCopiedBulletinText(false), 2000);
-                };
-
-                return (
-                  <div className="space-y-2.5 pt-1.5 font-sans">
-                    <label className="block text-[11px] font-bold text-[#5A5A40]">카카오톡 전송용 미리보기</label>
-                    <div className="p-3 bg-stone-50 border border-[#E9E3D8] rounded-xl text-[10px] text-stone-700 leading-relaxed font-mono whitespace-pre-wrap max-h-[180px] overflow-y-auto">
-                      {fullMessage}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyBulletinText}
-                      className="w-full py-2.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      {copiedBulletinText ? '✓ 카톡 알림 복사 완료!' : '📋 카톡 발송용 전체 내용 복사'}
-                    </button>
-                  </div>
-                );
-              })()}
             </div>
           )}
 
@@ -1272,6 +1351,47 @@ export default function ManagerPanel({
                 <button
                   type="button"
                   onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 py-2.5 bg-[#F5F5F0] border border-[#E9E3D8] text-[#5A5A40] text-xs font-bold rounded-xl hover:bg-[#E9E3D8] transition cursor-pointer"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Custom Prayer Deletion Confirm Modal to Bypass iframe window.confirm Restrictions */}
+      {deletePrayerConfirmId && (() => {
+        const prayerToDelete = prayers.find(p => p.id === deletePrayerConfirmId);
+        if (!prayerToDelete) return null;
+        return (
+          <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white border border-[#E9E3D8] rounded-[24px] p-6 max-w-sm w-full shadow-xl text-center space-y-4">
+              <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-serif font-bold text-[#5A5A40]">중보기도 제목 삭제 확인</h3>
+                <p className="text-xs text-[#7A7A6A] mt-1.5 leading-relaxed font-sans">
+                  정말 <strong>"{prayerToDelete.title}"</strong> 중보기도 제목을 영구적으로 삭제하시겠습니까?<br />
+                  삭제 시 해당 기도내용 및 아멘 동참 기록이 영구히 지워집니다.
+                </p>
+              </div>
+              <div className="flex gap-2 pt-1 font-sans">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeletePrayer(deletePrayerConfirmId);
+                    setDeletePrayerConfirmId(null);
+                  }}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  네, 삭제합니다
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeletePrayerConfirmId(null)}
                   className="flex-1 py-2.5 bg-[#F5F5F0] border border-[#E9E3D8] text-[#5A5A40] text-xs font-bold rounded-xl hover:bg-[#E9E3D8] transition cursor-pointer"
                 >
                   취소

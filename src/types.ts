@@ -102,3 +102,16 @@ export interface GongGwa {
   qnas: GongGwaQna[];
   introduction: string[];
 }
+
+export interface AnonymousPrayer {
+  id: string;
+  category: 'family' | 'health' | 'faith' | 'career' | 'others';
+  title: string;
+  content: string;
+  date: string;
+  amenCount: number;
+  status: 'praying' | 'answered';
+  isAnonymous?: boolean;
+  authorName?: string;
+}
+

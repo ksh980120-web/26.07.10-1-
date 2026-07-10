@@ -140,11 +140,13 @@ export default function MainLanding({ onStart }: MainLandingProps) {
             </p>
           </div>
 
-          <div className="border-t border-[#E9E3D8] pt-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <p className="text-xs font-bold tracking-wider text-[#7A7A6A] leading-relaxed font-serif text-center sm:text-left">
+          <div className="border-t border-[#E9E3D8] pt-4 text-center sm:text-left space-y-1">
+            <p className="text-xs font-bold tracking-wider text-[#7A7A6A] leading-relaxed font-serif">
               "오직 말씀중심, 은혜중심으로 일어서는 학장교회"
             </p>
-            <span className="text-[10px] text-stone-400 font-bold shrink-0">ⓒ 학장교회</span>
+            <div className="text-[10px] text-stone-400 font-bold" title="1954년 3월 설립">
+              ⓒ 학장교회 (since 1954.03)
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2.5 text-[10.5px] sm:text-[11px] font-bold text-[#5A5A40] pt-2 justify-center md:justify-start">
@@ -156,6 +158,9 @@ export default function MainLanding({ onStart }: MainLandingProps) {
             </span>
             <span className="bg-stone-100/70 text-stone-700 px-3 py-1.5 rounded-xl border border-stone-200 shadow-2xs flex items-center gap-1">
               📔 나만의 신앙 성장 노트
+            </span>
+            <span className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl border border-purple-100 shadow-2xs flex items-center gap-1">
+              🙏 함께 나누는 중보기도
             </span>
           </div>
         </div>
@@ -190,35 +195,36 @@ export default function MainLanding({ onStart }: MainLandingProps) {
               </div>
             )}
 
-             <div className="space-y-1.5 animate-fadeIn">
-              <label className="text-xs font-bold text-[#7A7A6A]">아이디 (ID)</label>
-              <input 
-                type="text" 
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="아이디 또는 이메일"
-                className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
-              />
-              <p className="text-[10.5px] text-[#8A9A5B] font-bold leading-relaxed mt-1 font-sans">
-                💡 회원가입 시 나만의 소중한 말씀 암송 진도와 신앙成長 일지가 기록되어 안전하게 보관·관리됩니다.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#7A7A6A]">비밀번호</label>
-              <input 
-                type="password" 
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
-              />
-            </div>
-
-            {/* 회원가입 시 필수 입력 필드 (이름, 전화번호) */}
-            {!isLogin && (
+            {isLogin ? (
               <>
+                <div className="space-y-1.5 animate-fadeIn">
+                  <label className="text-xs font-bold text-[#7A7A6A]">아이디 (ID)</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="아이디 또는 이메일"
+                    className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
+                  />
+                  <p className="text-[10.5px] text-[#8A9A5B] font-bold leading-relaxed mt-1 font-sans">
+                    💡 가입하여 암송 기록과 말씀 묵상을 저장하고, 신앙 성장의 발자취를 이어가세요.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#7A7A6A]">비밀번호</label>
+                  <input 
+                    type="password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4 animate-fadeIn">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-[#7A7A6A] flex items-center gap-1">
                     성도 이름 <span className="text-rose-500 font-bold">*필수</span>
@@ -244,8 +250,33 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                     placeholder="예: 010-1234-5678"
                     className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
                   />
+                  <p className="text-[10px] text-[#8A9A5B] font-bold leading-relaxed mt-1 font-sans">
+                    💡 휴대전화 번호는 아이디나 비밀번호를 잃어버렸을 때 본인 확인 및 계정 조회용으로 안전하게 사용됩니다.
+                  </p>
                 </div>
-              </>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#7A7A6A]">사용할 아이디 (ID)</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="희망하는 아이디 또는 이메일"
+                    className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#7A7A6A]">비밀번호 설정</label>
+                  <input 
+                    type="password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full text-xs p-3 rounded-xl border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
+                  />
+                </div>
+              </div>
             )}
 
             <button 

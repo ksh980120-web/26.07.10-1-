@@ -27,10 +27,11 @@ import {
   ClipboardList,
   Mic,
   Edit3,
-  Trash2
+  Trash2,
+  Heart
 } from 'lucide-react';
 
-import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa } from './types';
+import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa, AnonymousPrayer } from './types';
 import { INITIAL_VERSES, DEFAULT_GONGGWA_LESSONS } from './data';
 import BlankPractice from './components/BlankPractice';
 import WriteTest from './components/WriteTest';
@@ -39,6 +40,7 @@ import SpeakAlong from './components/SpeakAlong';
 import PersonalFaithNote from './components/PersonalFaithNote';
 import MainLanding from './components/MainLanding';
 import GongGwaPanel from './components/GongGwaPanel';
+import AnonymousPrayerPanel from './components/AnonymousPrayerPanel';
 
 export default function App() {
   // --- STATE DEFINITIONS ---
@@ -58,8 +60,75 @@ export default function App() {
   const [showPastorPanel, setShowPastorPanel] = useState(false); // New pastor dashboard view state
   const [showMeditationIntro, setShowMeditationIntro] = useState(true);
   
-  // Tab layout: 'community' (Church-wide verses), 'gonggwa' (weekly lesson), or 'personal' (Personal Faith Notebook)
-  const [activeMainTab, setActiveMainTab] = useState<'community' | 'gonggwa' | 'personal'>('community');
+  // Tab layout: 'community' (Church-wide verses), 'gonggwa' (weekly lesson), 'personal' (Personal Faith Notebook), or 'prayer' (Anonymous prayer board)
+  const [activeMainTab, setActiveMainTab] = useState<'community' | 'gonggwa' | 'personal' | 'prayer'>('community');
+
+  // Anonymous Prayers state
+  const [prayers, setPrayers] = useState<AnonymousPrayer[]>(() => {
+    try {
+      const saved = localStorage.getItem('manna_anonymous_prayers');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [
+      {
+        id: 'prayer-default-1',
+        category: 'health',
+        title: '요양병원에 계신 노모의 호흡기 질환 완쾌를 구합니다.',
+        content: '연로하신 어머님께서 요양병원에 계시는데, 최근 환절기 독감과 폐렴 증세가 겹쳐 무척 고통스러워하십니다. 주님의 자비로운 손길로 호흡기를 어루만져 주시고, 깨끗이 치유와 회복의 기적이 임하도록 함께 두 손 모아 주시면 감사하겠습니다.',
+        date: '2026.07.03',
+        amenCount: 14,
+        status: 'praying'
+      },
+      {
+        id: 'prayer-default-2',
+        category: 'career',
+        title: '고3 수험생 자녀가 시험 스트레스 속에 평안을 누리길 원합니다.',
+        content: '올해 대학 시험을 준비하는 우리 아이가 심리적 압박감과 불면증으로 깊은 피로를 겪고 있습니다. 눈앞의 성적보다 주님이 주시는 선한 동행을 신뢰하게 하시고, 평안한 마음과 담대함을 부어주시길 간절히 소망합니다.',
+        date: '2026.07.06',
+        amenCount: 9,
+        status: 'praying'
+      },
+      {
+        id: 'prayer-default-3',
+        category: 'faith',
+        title: '가정예배의 제단이 다시 쌓여 온 가족이 주를 섬기게 하소서.',
+        content: '분주하다는 핑계로 오랫동안 가정예배를 드리지 못했습니다. 다시금 남편과 아이들과 함께 일주일에 한 번씩 말씀 앞에 머무르며 하나님을 기쁘시게 하는 기도의 제단을 회복하는 믿음의 가정 되길 기도합니다.',
+        date: '2026.07.08',
+        amenCount: 22,
+        status: 'answered'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('manna_anonymous_prayers', JSON.stringify(prayers));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [prayers]);
+
+  const handleAddPrayer = (entry: AnonymousPrayer) => {
+    setPrayers(prev => [entry, ...prev]);
+  };
+
+  const handleUpdatePrayer = (id: string, updatedFields: Partial<AnonymousPrayer>) => {
+    setPrayers(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+  };
+
+  const handleIncrementAmen = (id: string, isAdding: boolean = true) => {
+    setPrayers(prev => prev.map(p => p.id === id ? { ...p, amenCount: Math.max(0, p.amenCount + (isAdding ? 1 : -1)) } : p));
+  };
+
+  const handleDeletePrayer = (id: string) => {
+    setPrayers(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleTogglePrayerStatus = (id: string) => {
+    setPrayers(prev => prev.map(p => p.id === id ? { ...p, status: p.status === 'praying' ? 'answered' : 'praying' } : p));
+  };
  
   // Main login gate authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -843,6 +912,10 @@ export default function App() {
               userRole={userRole || 'pastor'}
               gongGwaLessons={gongGwaLessons}
               onUpdateGongGwaLessons={saveGongGwaLessons}
+              prayers={prayers}
+              onDeletePrayer={handleDeletePrayer}
+              onTogglePrayerStatus={handleTogglePrayerStatus}
+              onUpdatePrayer={handleUpdatePrayer}
             />
           )
         ) : (
@@ -870,43 +943,55 @@ export default function App() {
               </div>
             </div>
 
-            {/* THREE-WAY SEGMENTED TAB BAR */}
-            <div className="bg-[#F5F5F0] p-1.5 rounded-[24px] border border-[#E9E3D8] shadow-inner max-w-3xl mx-auto" id="three-way-segmented-pillars">
-              <div className="grid grid-cols-3 gap-1 md:gap-2">
+            {/* FOUR-WAY SEGMENTED TAB BAR */}
+            <div className="bg-[#F5F5F0] p-1.5 rounded-[24px] border border-[#E9E3D8] shadow-inner max-w-3xl mx-auto" id="four-way-segmented-pillars">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-1 md:gap-2">
                 <button
                   onClick={() => setActiveMainTab('community')}
-                  className={`py-3.5 px-2 rounded-[18px] text-[10.5px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
+                  className={`py-3 px-1.5 rounded-[18px] text-[10px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
                     activeMainTab === 'community'
                       ? 'bg-white text-[#5A5A40] shadow-md border border-[#E9E3D8]/40 font-black'
                       : 'text-[#7A7A6A] hover:bg-white/40 hover:text-[#5A5A40]'
                   }`}
                 >
                   <BookMarked className={`w-4 h-4 md:w-5 md:h-5 ${activeMainTab === 'community' ? 'text-[#8A9A5B]' : 'text-[#7A7A6A]'}`} />
-                  <span className="text-[10px] md:text-xs">⛪ 학장교회 금주암송성구</span>
+                  <span className="text-[9.5px] sm:text-[11px] md:text-xs">⛪ 금주 암송성구</span>
                 </button>
 
                 <button
                   onClick={() => setActiveMainTab('gonggwa')}
-                  className={`py-3.5 px-2 rounded-[18px] text-[10.5px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
+                  className={`py-3 px-1.5 rounded-[18px] text-[10px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
                     activeMainTab === 'gonggwa'
                       ? 'bg-white text-[#5A5A40] shadow-md border border-[#E9E3D8]/40 font-black'
                       : 'text-[#7A7A6A] hover:bg-white/40 hover:text-[#5A5A40]'
                   }`}
                 >
                   <BookOpen className={`w-4 h-4 md:w-5 md:h-5 ${activeMainTab === 'gonggwa' ? 'text-[#8A9A5B]' : 'text-[#7A7A6A]'}`} />
-                  <span className="text-[10px] md:text-xs">📖 주간 공과공부</span>
+                  <span className="text-[9.5px] sm:text-[11px] md:text-xs">📖 주간 공과공부</span>
                 </button>
 
                 <button
                   onClick={() => setActiveMainTab('personal')}
-                  className={`py-3.5 px-2 rounded-[18px] text-[10.5px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
+                  className={`py-3 px-1.5 rounded-[18px] text-[10px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
                     activeMainTab === 'personal'
                       ? 'bg-white text-[#5A5A40] shadow-md border border-[#E9E3D8]/40 font-black'
                       : 'text-[#7A7A6A] hover:bg-white/40 hover:text-[#5A5A40]'
                   }`}
                 >
                   <ClipboardList className={`w-4 h-4 md:w-5 md:h-5 ${activeMainTab === 'personal' ? 'text-[#8A9A5B]' : 'text-[#7A7A6A]'}`} />
-                  <span className="text-[10px] md:text-xs">✍️ 나의 신앙노트</span>
+                  <span className="text-[9.5px] sm:text-[11px] md:text-xs">✍️ 나의 신앙노트</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveMainTab('prayer')}
+                  className={`py-3 px-1.5 rounded-[18px] text-[10px] sm:text-xs font-bold font-serif transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer select-none ${
+                    activeMainTab === 'prayer'
+                      ? 'bg-white text-[#5A5A40] shadow-md border border-[#E9E3D8]/40 font-black'
+                      : 'text-[#7A7A6A] hover:bg-white/40 hover:text-[#5A5A40]'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 md:w-5 md:h-5 ${activeMainTab === 'prayer' ? 'text-[#8A9A5B] fill-[#8A9A5B]/10' : 'text-[#7A7A6A]'}`} />
+                  <span className="text-[9.5px] sm:text-[11px] md:text-xs">🙏 익명 중보기도함</span>
                 </button>
               </div>
             </div>
@@ -931,6 +1016,14 @@ export default function App() {
                   onStartWriteTest={startWriteTest}
                   onStartSpeakAlong={startSpeakAlong}
                   gongGwaLessons={gongGwaLessons}
+                />
+              ) : activeMainTab === 'prayer' ? (
+                <AnonymousPrayerPanel
+                  prayers={prayers}
+                  onAddPrayer={handleAddPrayer}
+                  onIncrementAmen={handleIncrementAmen}
+                  onUpdatePrayer={handleUpdatePrayer}
+                  onTogglePrayerStatus={handleTogglePrayerStatus}
                 />
               ) : (
                 /* STANDARD DASHBOARD LIST VIEW */
@@ -1844,7 +1937,7 @@ export default function App() {
                 매주 금주암송성구를 암송하고, 분기별 성경 암송 시험에 완벽하게 대비해 보세요.
               </p>
               <p className="text-[10px] text-stone-500">
-                © 2026 학장교회 (만나: 말씀으로 하나님과 매일 만나는 나) - 오직 여호와의 율법을 즐거워하여 그의 율법을 주야로 묵상하는도다 (시 1:2)
+                © 1954-2026 학장교회 (since 1954.03 | 만나: 말씀으로 하나님과 매일 만나는 나) - 오직 여호와의 율법을 즐거워하여 그의 율법을 주야로 묵상하는도다 (시 1:2)
               </p>
             </div>
 

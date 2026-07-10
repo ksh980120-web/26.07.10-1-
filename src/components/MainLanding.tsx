@@ -197,6 +197,34 @@ export default function MainLanding({ onStart }: MainLandingProps) {
 
             {isLogin ? (
               <>
+                {/* 체험 계정 안내 배너 */}
+                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-xl p-3 space-y-1.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold text-[#5A5A40] flex items-center gap-1">
+                      💡 회원가입 없이 즉시 체험하기
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail('test');
+                        setPassword('test1234');
+                      }}
+                      className="px-2 py-0.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-[9px] font-bold rounded-md transition cursor-pointer"
+                    >
+                      자동 입력 ⚡
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-stone-600 space-y-0.5 font-sans leading-relaxed">
+                    <p>
+                      <strong>아이디:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test</code> &nbsp;/&nbsp; 
+                      <strong>비밀번호:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test1234</code>
+                    </p>
+                    <p className="text-[9.5px] text-[#7A7A6A] leading-normal pt-0.5">
+                      ※ 체험 계정(테스트성도)은 말씀 암송 성취도 개별 기록, 나만의 묵상 노트 및 중보기도 올리기 등의 등록·수정 권한이 일부 제한되어 있으니 둘러보신 후 개별 가입을 권장합니다.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5 animate-fadeIn">
                   <label className="text-xs font-bold text-[#7A7A6A]">아이디 (ID)</label>
                   <input 

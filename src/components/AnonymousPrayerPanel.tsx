@@ -8,6 +8,7 @@ interface AnonymousPrayerPanelProps {
   onIncrementAmen: (id: string, isAdding?: boolean) => void;
   onUpdatePrayer?: (id: string, updatedFields: Partial<AnonymousPrayer>) => void;
   onTogglePrayerStatus?: (id: string) => void;
+  isDemoUser?: boolean;
 }
 
 const CATEGORY_MAP = {
@@ -24,6 +25,7 @@ export default function AnonymousPrayerPanel({
   onIncrementAmen,
   onUpdatePrayer,
   onTogglePrayerStatus,
+  isDemoUser = false,
 }: AnonymousPrayerPanelProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +85,7 @@ export default function AnonymousPrayerPanel({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoUser) return;
     if (!newTitle.trim() || !newContent.trim()) return;
     if (!isAnonymous && !authorName.trim()) return;
 
@@ -179,6 +182,20 @@ export default function AnonymousPrayerPanel({
         </div>
       </div>
 
+      {isDemoUser && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2.5xl p-4 sm:p-5 flex items-start gap-3.5 animate-fadeIn shadow-2xs">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-amber-900">⚠️ 체험 계정 기능 제한 안내</h4>
+            <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+              현재 <strong>체험 계정(테스트성도)</strong>으로 둘러보고 계십니다. 
+              체험 계정은 누구나 같은 계정을 사용하므로, <strong>중보기도 등록 및 개별 수정/삭제/상태변경 권한이 제한</strong>되어 있습니다.
+              나만의 말씀 암송 기록을 온전히 보관하고 중보기도를 자유롭게 올리시려면 <strong>로그아웃 후 본인의 이름과 번호로 개별 가입</strong>을 해 주십시오!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Tab: Praying vs Answered Miracles */}
       <div className="bg-[#F5F5F0] p-1 rounded-2xl border border-[#E9E3D8] shadow-inner max-w-xl mx-auto flex">
         <button
@@ -257,6 +274,15 @@ export default function AnonymousPrayerPanel({
             ✏️ 마음을 나누는 익명 중보기도 등록
           </h4>
 
+          {isDemoUser && (
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-[10.5px] font-bold leading-relaxed flex items-start gap-2">
+              <span className="text-amber-600">⚠️</span>
+              <div>
+                <strong>체험 계정 기능 제한:</strong> 체험 계정(테스트성도)으로 접속 중이시므로 새로운 기도 등록이 제한됩니다. 다른 성도들의 기도를 읽고 <strong className="text-[#8A9A5B]">[아멘 동참]</strong>을 클릭하실 수는 있습니다. 기도를 직접 등록하시려면 로그아웃 후 개별 회원가입을 통해 성도님만의 계정을 생성하여 주십시오!
+              </div>
+            </div>
+          )}
+
           {submitSuccess ? (
             <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-4 text-center text-xs font-semibold flex items-center justify-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -271,18 +297,20 @@ export default function AnonymousPrayerPanel({
                     type="text"
                     required
                     maxLength={40}
-                    placeholder="예: 편찮으신 아버님의 건강 회복을 위해 구합니다."
+                    disabled={isDemoUser}
+                    placeholder={isDemoUser ? "체험 계정은 입력할 수 없습니다." : "예: 편찮으신 아버님의 건강 회복을 위해 구합니다."}
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30"
+                    className="w-full text-xs p-2.5 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 disabled:bg-stone-50 disabled:text-stone-400 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-[#7A7A6A] mb-1">기도 분야 선택</label>
                   <select
                     value={newCategory}
+                    disabled={isDemoUser}
                     onChange={(e) => setNewCategory(e.target.value as any)}
-                    className="w-full text-xs p-2.5 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 font-semibold"
+                    className="w-full text-xs p-2.5 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 font-semibold disabled:bg-stone-50 disabled:text-stone-400 disabled:cursor-not-allowed"
                   >
                     <option value="faith">신앙 / 영성</option>
                     <option value="health">건강 / 치유</option>
@@ -299,8 +327,9 @@ export default function AnonymousPrayerPanel({
                   <div className="flex gap-2">
                     <button
                       type="button"
+                      disabled={isDemoUser}
                       onClick={() => setIsAnonymous(true)}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         isAnonymous
                           ? 'bg-[#8A9A5B] border-[#8A9A5B] text-white'
                           : 'bg-white border-[#E9E3D8] text-[#7A7A6A] hover:bg-stone-50'
@@ -310,8 +339,9 @@ export default function AnonymousPrayerPanel({
                     </button>
                     <button
                       type="button"
+                      disabled={isDemoUser}
                       onClick={() => setIsAnonymous(false)}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         !isAnonymous
                           ? 'bg-[#8A9A5B] border-[#8A9A5B] text-white'
                           : 'bg-white border-[#E9E3D8] text-[#7A7A6A] hover:bg-stone-50'
@@ -329,10 +359,11 @@ export default function AnonymousPrayerPanel({
                       type="text"
                       required={!isAnonymous}
                       maxLength={15}
+                      disabled={isDemoUser}
                       placeholder="성함과 직분을 적어주세요"
                       value={authorName}
                       onChange={(e) => setAuthorName(e.target.value)}
-                      className="w-full text-xs p-2 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 font-bold"
+                      className="w-full text-xs p-2 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 font-bold disabled:bg-stone-50 disabled:text-stone-400 disabled:cursor-not-allowed"
                     />
                   </div>
                 ) : (
@@ -348,10 +379,11 @@ export default function AnonymousPrayerPanel({
                   required
                   rows={4}
                   maxLength={500}
-                  placeholder="함께 기도를 모으고 싶은 내용을 자세히 적어보세요. (익명으로 안전하게 등록되며, 개인 식별 정보는 절대 저장되지 않습니다. 작성하신 기기는 나중에 수정 및 응답 완료를 스스로 처리할 수 있습니다.)"
+                  disabled={isDemoUser}
+                  placeholder={isDemoUser ? "체험 계정은 입력할 수 없습니다. 개별 회원가입 후 나만의 전용 계정으로 기도를 적어 주세요!" : "함께 기도를 모으고 싶은 내용을 자세히 적어보세요. (익명으로 안전하게 등록되며, 개인 식별 정보는 절대 저장되지 않습니다. 작성하신 기기는 나중에 수정 및 응답 완료를 스스로 처리할 수 있습니다.)"}
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full text-xs p-3 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] placeholder-[#A0A090] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 leading-relaxed"
+                  className="w-full text-xs p-3 rounded-lg border border-[#E9E3D8] bg-white text-[#4A4A4A] placeholder-[#A0A090] focus:outline-none focus:ring-1 focus:ring-[#8A9A5B]/30 leading-relaxed disabled:bg-stone-50 disabled:text-stone-400 disabled:placeholder-stone-300 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -363,12 +395,18 @@ export default function AnonymousPrayerPanel({
                 </p>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-[#8A9A5B] hover:bg-[#78884F] text-white font-extrabold text-xs rounded-xl transition shadow-xs cursor-pointer"
-              >
-                중보기도함에 정성껏 올리기 🙏
-              </button>
+              {isDemoUser ? (
+                <div className="w-full py-3 bg-stone-200 text-stone-500 font-extrabold text-xs rounded-xl text-center border border-stone-300 cursor-not-allowed flex items-center justify-center gap-1.5 select-none">
+                  🔒 체험 계정은 중보기도를 올릴 수 없습니다 (가입 필요)
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-[#8A9A5B] hover:bg-[#78884F] text-white font-extrabold text-xs rounded-xl transition shadow-xs cursor-pointer"
+                >
+                  중보기도함에 정성껏 올리기 🙏
+                </button>
+              )}
             </div>
           )}
         </form>
@@ -420,7 +458,7 @@ export default function AnonymousPrayerPanel({
           filteredPrayers.map((prayer) => {
             const catInfo = CATEGORY_MAP[prayer.category] || CATEGORY_MAP.others;
             const hasVoted = votedPrayers.includes(prayer.id);
-            const isOwner = myPrayerIds.includes(prayer.id);
+            const isOwner = !isDemoUser && myPrayerIds.includes(prayer.id);
             const isEditing = editingId === prayer.id;
 
             return (

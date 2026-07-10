@@ -1024,6 +1024,7 @@ export default function App() {
                   onIncrementAmen={handleIncrementAmen}
                   onUpdatePrayer={handleUpdatePrayer}
                   onTogglePrayerStatus={handleTogglePrayerStatus}
+                  isDemoUser={currentUserName === '테스트성도'}
                 />
               ) : (
                 /* STANDARD DASHBOARD LIST VIEW */

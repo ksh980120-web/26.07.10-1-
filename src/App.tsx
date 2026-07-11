@@ -28,11 +28,13 @@ import {
   Mic,
   Edit3,
   Trash2,
-  Heart
+  Heart,
+  Megaphone,
+  Plus,
+  X
 } from 'lucide-react';
 
-import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa, AnonymousPrayer } from './types';
-import { INITIAL_VERSES, DEFAULT_GONGGWA_LESSONS } from './data';
+import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa, AnonymousPrayer, Announcement } from './types';
 import BlankPractice from './components/BlankPractice';
 import WriteTest from './components/WriteTest';
 import ManagerPanel from './components/ManagerPanel';
@@ -41,6 +43,29 @@ import PersonalFaithNote from './components/PersonalFaithNote';
 import MainLanding from './components/MainLanding';
 import GongGwaPanel from './components/GongGwaPanel';
 import AnonymousPrayerPanel from './components/AnonymousPrayerPanel';
+import {
+  fetchVerses,
+  saveVerseToDb,
+  deleteVerseFromDb,
+  fetchUserStatuses,
+  saveStatusToDb,
+  fetchUserAttempts,
+  saveAttemptToDb,
+  fetchPrayersFromDb,
+  savePrayerToDb,
+  deletePrayerFromDb,
+  updateSaintCompletedCountInDb,
+  isSupabaseConfigured,
+  AppUser,
+  fetchLessonsFromDb,
+  saveLessonToDb,
+  deleteLessonFromDb,
+  fetchAnnouncements,
+  saveAnnouncementToDb,
+  deleteAnnouncementFromDb,
+  onAuthStateChange,
+  appSignOut
+} from './lib/supabase';
 
 export default function App() {
   // --- STATE DEFINITIONS ---
@@ -52,6 +77,14 @@ export default function App() {
   const [pinnedVerseId, setPinnedVerseId] = useState<string>('');
   const [pinnedMonthVerseId, setPinnedMonthVerseId] = useState<string>('');
   const [gongGwaLessons, setGongGwaLessons] = useState<GongGwa[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showAddAnnForm, setShowAddAnnForm] = useState(false);
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnContent, setNewAnnContent] = useState('');
+  const [newAnnAuthor, setNewAnnAuthor] = useState('');
+  
+  const [isCommonDataLoading, setIsCommonDataLoading] = useState<boolean>(true);
+  const [commonDataError, setCommonDataError] = useState<string | null>(null);
   
   // Navigation / Mode states
   const [activeView, setActiveView] = useState<'list' | 'blank_practice' | 'write_test' | 'speak_along'>('list');
@@ -110,37 +143,120 @@ export default function App() {
     }
   }, [prayers]);
 
-  const handleAddPrayer = (entry: AnonymousPrayer) => {
+  const handleAddPrayer = async (entry: AnonymousPrayer) => {
     setPrayers(prev => [entry, ...prev]);
+    if (userRole !== 'guest') {
+      await savePrayerToDb(currentUserId || null, entry);
+    }
   };
 
-  const handleUpdatePrayer = (id: string, updatedFields: Partial<AnonymousPrayer>) => {
+  const handleUpdatePrayer = async (id: string, updatedFields: Partial<AnonymousPrayer>) => {
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+    const updated = prayers.find(p => p.id === id);
+    if (updated && userRole !== 'guest') {
+      await savePrayerToDb(currentUserId || null, { ...updated, ...updatedFields });
+    }
   };
 
-  const handleIncrementAmen = (id: string, isAdding: boolean = true) => {
+  const handleIncrementAmen = async (id: string, isAdding: boolean = true) => {
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, amenCount: Math.max(0, p.amenCount + (isAdding ? 1 : -1)) } : p));
+    const target = prayers.find(p => p.id === id);
+    if (target && userRole !== 'guest') {
+      await savePrayerToDb(currentUserId || null, { ...target, amenCount: Math.max(0, target.amenCount + (isAdding ? 1 : -1)) });
+    }
   };
 
-  const handleDeletePrayer = (id: string) => {
+  const handleDeletePrayer = async (id: string) => {
     setPrayers(prev => prev.filter(p => p.id !== id));
+    if (userRole !== 'guest') {
+      await deletePrayerFromDb(id);
+    }
   };
 
-  const handleTogglePrayerStatus = (id: string) => {
+  const handleTogglePrayerStatus = async (id: string) => {
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, status: p.status === 'praying' ? 'answered' : 'praying' } : p));
+    const target = prayers.find(p => p.id === id);
+    if (target && userRole !== 'guest') {
+      await savePrayerToDb(currentUserId || null, { ...target, status: target.status === 'praying' ? 'answered' : 'praying' });
+    }
   };
  
-  // Main login gate authentication state
+  // --- USER AUTHENTICATION STATE ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const role = sessionStorage.getItem('hagah_user_role');
+    if (role === 'guest') {
+      sessionStorage.removeItem('hagah_user_authenticated');
+      sessionStorage.removeItem('hagah_user_role');
+      sessionStorage.removeItem('hagah_user_id');
+      sessionStorage.removeItem('hagah_user_name');
+      sessionStorage.removeItem('hagah_user_phone');
+      return false;
+    }
     return sessionStorage.getItem('hagah_user_authenticated') === 'true';
   });
-  const [userRole, setUserRole] = useState<'user' | 'pastor' | 'manager' | null>(() => {
-    return sessionStorage.getItem('hagah_user_role') as 'user' | 'pastor' | 'manager' | null;
+  const [userRole, setUserRole] = useState<'master' | 'pastor' | 'admin' | 'member' | 'guest' | null>(() => {
+    const role = sessionStorage.getItem('hagah_user_role');
+    return role === 'guest' ? null : (role as any);
   });
-
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    return sessionStorage.getItem('hagah_user_id') || 'guest';
+  });
   const [currentUserName, setCurrentUserName] = useState<string>(() => {
     return sessionStorage.getItem('hagah_user_name') || '성도';
   });
+  const [currentUserPhone, setCurrentUserPhone] = useState<string>(() => {
+    return sessionStorage.getItem('hagah_user_phone') || '';
+  });
+
+  // --- REAL-TIME AUTH STATE LISTENER (onAuthStateChange) ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        setUserRole(user.role);
+        setCurrentUserId(user.id);
+        setCurrentUserName(user.name);
+        setCurrentUserPhone(user.phone || '');
+        
+        // If logged in as master, pastor, or admin, automatically authenticate the admin view too!
+        if (user.role === 'master' || user.role === 'pastor' || user.role === 'admin') {
+          setIsAdminAuthenticated(true);
+          sessionStorage.setItem('hagah_admin_auth', 'true');
+        } else {
+          setIsAdminAuthenticated(false);
+          sessionStorage.removeItem('hagah_admin_auth');
+        }
+
+        // Persist session to session storage
+        sessionStorage.setItem('hagah_user_authenticated', 'true');
+        sessionStorage.setItem('hagah_user_id', user.id);
+        sessionStorage.setItem('hagah_user_role', user.role);
+        sessionStorage.setItem('hagah_user_name', user.name);
+        sessionStorage.setItem('hagah_user_phone', user.phone || '');
+      } else {
+        const isCurrentlyGuest = sessionStorage.getItem('hagah_user_role') === 'guest';
+        if (!isCurrentlyGuest) {
+          setIsAuthenticated(false);
+          setUserRole(null);
+          setCurrentUserId('guest');
+          setCurrentUserName('성도');
+          setCurrentUserPhone('');
+          setIsAdminAuthenticated(false);
+          
+          sessionStorage.removeItem('hagah_user_authenticated');
+          sessionStorage.removeItem('hagah_user_role');
+          sessionStorage.removeItem('hagah_user_id');
+          sessionStorage.removeItem('hagah_user_name');
+          sessionStorage.removeItem('hagah_user_phone');
+          sessionStorage.removeItem('hagah_admin_auth');
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Admin authentication state
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -177,97 +293,97 @@ export default function App() {
     return unique;
   };
 
-  // --- LOCAL STORAGE SYNC & INITIALIZATION ---
+  // --- DATABASE DATA LOADING ---
   useEffect(() => {
-    // 1. Load & Deduplicate Verses
-    const savedVerses = localStorage.getItem('hagah_verses');
-    if (savedVerses) {
+    const loadCoreData = async () => {
+      setIsCommonDataLoading(true);
+      setCommonDataError(null);
+
+      // Clean legacy localStorage keys for common data to respect: "localStorage에 남아있는 공용 데이터는 모두 제거해주세요."
+      localStorage.removeItem('hagah_verses');
+      localStorage.removeItem('hagah_gonggwa_lessons');
+      localStorage.removeItem('hagah_announcements');
+
       try {
-        const parsed = JSON.parse(savedVerses);
-        const cleaned = deduplicateVerses(parsed);
-        setVerses(cleaned);
-        localStorage.setItem('hagah_verses', JSON.stringify(cleaned));
-      } catch (e) {
-        setVerses(deduplicateVerses(INITIAL_VERSES));
-      }
-    } else {
-      setVerses(deduplicateVerses(INITIAL_VERSES));
-    }
+        // 1. Load Verses from Supabase
+        const dbVerses = await fetchVerses();
+        setVerses(deduplicateVerses(dbVerses || []));
 
-    // Clear any selected verse ID to reset selection
-    setSelectedVerseId(null);
+        // 2. Load Gonggwa from Supabase
+        const dbLessons = await fetchLessonsFromDb();
+        setGongGwaLessons(dbLessons || []);
 
-    // 2. Load Statuses
-    const savedStatuses = localStorage.getItem('hagah_statuses');
-    if (savedStatuses) {
-      try {
-        setVerseStatuses(JSON.parse(savedStatuses));
-      } catch (e) {}
-    }
+        // 3. Load Announcements from Supabase
+        const dbAnnouncements = await fetchAnnouncements();
+        setAnnouncements(dbAnnouncements || []);
 
-    // 3. Load Attempts
-    const savedAttempts = localStorage.getItem('hagah_attempts');
-    if (savedAttempts) {
-      try {
-        setAttempts(JSON.parse(savedAttempts));
-      } catch (e) {}
-    }
-
-    // 4. Load Streak
-    const savedStreak = localStorage.getItem('hagah_streak');
-    const lastActiveDate = localStorage.getItem('hagah_last_active_date');
-    const todayStr = new Date().toLocaleDateString();
-
-    if (savedStreak) {
-      const currentStreak = Number(savedStreak);
-      if (lastActiveDate) {
-        const lastDate = new Date(lastActiveDate);
-        const today = new Date(todayStr);
-        const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1) {
-          // Consecutively next day! Maintain streak
-          setStreak(currentStreak);
-        } else if (diffDays > 1) {
-          // Broke streak
-          setStreak(1);
-          localStorage.setItem('hagah_streak', '1');
-        } else {
-          // Same day
-          setStreak(currentStreak);
+        // 4. Load Prayers
+        const dbPrayers = await fetchPrayersFromDb();
+        if (dbPrayers && dbPrayers.length > 0) {
+          setPrayers(dbPrayers);
         }
-      } else {
-        setStreak(1);
-      }
-    } else {
-      setStreak(1);
-      localStorage.setItem('hagah_streak', '1');
-    }
-    localStorage.setItem('hagah_last_active_date', todayStr);
-
-    // 5. Load Pinned Verse
-    const savedPinned = localStorage.getItem('hagah_pinned_verse');
-    if (savedPinned) {
-      setPinnedVerseId(savedPinned);
-    }
-    const savedPinnedMonth = localStorage.getItem('hagah_pinned_month_verse');
-    if (savedPinnedMonth) {
-      setPinnedMonthVerseId(savedPinnedMonth);
-    }
-
-    // 6. Load GongGwa Lessons
-    const savedGongGwa = localStorage.getItem('hagah_gonggwa_lessons');
-    if (savedGongGwa) {
-      try {
-        setGongGwaLessons(JSON.parse(savedGongGwa));
       } catch (e) {
-        setGongGwaLessons(DEFAULT_GONGGWA_LESSONS);
+        console.error("Error loading core data:", e);
+        setCommonDataError("학장교회 데이터를 불러오는 중 오류가 발생했습니다. 네트워크 연결을 확인해 주세요.");
+      } finally {
+        setIsCommonDataLoading(false);
       }
-    } else {
-      setGongGwaLessons(DEFAULT_GONGGWA_LESSONS);
-    }
+    };
+
+    loadCoreData();
+  }, [isAdminAuthenticated]);
+
+  // --- REAL-TIME POLL & SYNC COMMON DATA FROM SUPABASE ---
+  useEffect(() => {
+    const syncCommonData = async () => {
+      try {
+        // 1. Sync Verses
+        const dbVerses = await fetchVerses();
+        if (dbVerses) {
+          setVerses(deduplicateVerses(dbVerses));
+        }
+
+        // 2. Sync Lessons
+        const dbLessons = await fetchLessonsFromDb();
+        if (dbLessons) {
+          setGongGwaLessons(dbLessons);
+        }
+
+        // 3. Sync Announcements
+        const dbAnnouncements = await fetchAnnouncements();
+        if (dbAnnouncements) {
+          setAnnouncements(dbAnnouncements);
+        }
+      } catch (e) {
+        console.error("Error syncing data:", e);
+      }
+    };
+
+    // Poll every 10 seconds
+    const interval = setInterval(syncCommonData, 10000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Load user-specific data (statuses, attempts) on user change
+  useEffect(() => {
+    const loadUserSpecificData = async () => {
+      if (!isAuthenticated || userRole === 'guest' || !currentUserId) {
+        setVerseStatuses({});
+        setAttempts([]);
+        return;
+      }
+
+      // Load Statuses
+      const dbStatuses = await fetchUserStatuses(currentUserId);
+      setVerseStatuses(dbStatuses);
+
+      // Load Attempts
+      const dbAttempts = await fetchUserAttempts(currentUserId);
+      setAttempts(dbAttempts);
+    };
+
+    loadUserSpecificData();
+  }, [currentUserId, userRole, isAuthenticated]);
 
   // Sync state with browser back/forward buttons (supporting hardware back button and swipe gestures)
   useEffect(() => {
@@ -317,26 +433,55 @@ export default function App() {
     }
   };
 
-  // Sync back to local storage whenever state changes
+  // Sync back to state
   const saveVerses = (updatedVerses: Verse[]) => {
     const cleaned = deduplicateVerses(updatedVerses);
     setVerses(cleaned);
-    localStorage.setItem('hagah_verses', JSON.stringify(cleaned));
   };
 
-  const saveStatuses = (updatedStatuses: { [key: string]: VerseStatus }) => {
+  const saveStatuses = async (updatedStatuses: { [key: string]: VerseStatus }) => {
     setVerseStatuses(updatedStatuses);
-    localStorage.setItem('hagah_statuses', JSON.stringify(updatedStatuses));
+    if (userRole !== 'guest') {
+      if (currentUserId) {
+        // Save to Supabase
+        for (const verseId of Object.keys(updatedStatuses)) {
+          await saveStatusToDb(currentUserId, updatedStatuses[verseId]);
+        }
+        
+        // Auto-sync Saint Progress (Completed Verses count) for member
+        if (userRole === 'member') {
+          const completedCount = Object.values(updatedStatuses).filter(s => s.status === 'completed').length;
+          const totalCount = verses.length || 12;
+          const dateStr = new Date().toLocaleDateString('ko-KR').slice(0, -1);
+          await updateSaintCompletedCountInDb(currentUserId, completedCount, totalCount, dateStr);
+        }
+      }
+    }
   };
 
-  const saveAttempts = (updatedAttempts: TestAttempt[]) => {
+  const saveAttempts = async (updatedAttempts: TestAttempt[]) => {
     setAttempts(updatedAttempts);
-    localStorage.setItem('hagah_attempts', JSON.stringify(updatedAttempts));
+    if (userRole !== 'guest') {
+      if (currentUserId && updatedAttempts.length > 0) {
+        await saveAttemptToDb(currentUserId, updatedAttempts[0]);
+      }
+    }
   };
 
-  const saveGongGwaLessons = (updatedGongGwa: GongGwa[]) => {
+  const saveGongGwaLessons = async (updatedGongGwa: GongGwa[]) => {
+    // Find deleted lessons
+    const deletedLessons = gongGwaLessons.filter(oldL => !updatedGongGwa.some(newL => newL.id === oldL.id));
+    
     setGongGwaLessons(updatedGongGwa);
-    localStorage.setItem('hagah_gonggwa_lessons', JSON.stringify(updatedGongGwa));
+    
+    if (isAdminAuthenticated) {
+      for (const oldL of deletedLessons) {
+        await deleteLessonFromDb(oldL.id);
+      }
+      for (const lesson of updatedGongGwa) {
+        await saveLessonToDb(lesson);
+      }
+    }
   };
 
   // Find a verse by ID from either the main verses list or GongGwa lesson verses list
@@ -383,7 +528,7 @@ export default function App() {
   };
 
   // Add verse
-  const handleAddVerse = (newVerseData: Omit<Verse, 'id'>) => {
+  const handleAddVerse = async (newVerseData: Omit<Verse, 'id'>) => {
     const newVerse: Verse = {
       ...newVerseData,
       id: `verse-custom-${Date.now()}`,
@@ -391,6 +536,10 @@ export default function App() {
     };
     const updated = [...verses, newVerse];
     saveVerses(updated);
+
+    if (isAdminAuthenticated) {
+      await saveVerseToDb(newVerse);
+    }
 
     // Initialize default status
     const updatedStatuses = {
@@ -405,15 +554,24 @@ export default function App() {
   };
 
   // Update verse
-  const handleUpdateVerse = (id: string, updatedFields: Partial<Verse>) => {
+  const handleUpdateVerse = async (id: string, updatedFields: Partial<Verse>) => {
     const updated = verses.map(v => v.id === id ? { ...v, ...updatedFields } : v);
     saveVerses(updated);
+
+    const target = updated.find(v => v.id === id);
+    if (target && isAdminAuthenticated) {
+      await saveVerseToDb(target);
+    }
   };
 
   // Delete verse
-  const handleDeleteVerse = (id: string) => {
+  const handleDeleteVerse = async (id: string) => {
     const updated = verses.filter(v => v.id !== id);
     saveVerses(updated);
+
+    if (isAdminAuthenticated) {
+      await deleteVerseFromDb(id);
+    }
 
     const updatedStatuses = { ...verseStatuses };
     delete updatedStatuses[id];
@@ -426,7 +584,7 @@ export default function App() {
   };
 
   // Import code from manager
-  const handleImportVerses = (imported: Verse[]) => {
+  const handleImportVerses = async (imported: Verse[]) => {
     // Generate new unique ids for imported verses to prevent collision, and mark them as custom
     const processedImported = imported.map((v, i) => ({
       ...v,
@@ -437,6 +595,12 @@ export default function App() {
     // We can replace existing, or append. Let's merge them!
     const merged = [...verses.filter(v => !v.isCustom), ...processedImported];
     saveVerses(merged);
+
+    if (isAdminAuthenticated) {
+      for (const v of processedImported) {
+        await saveVerseToDb(v);
+      }
+    }
 
     // Initialize statuses for imported verses
     const updatedStatuses = { ...verseStatuses };
@@ -453,26 +617,71 @@ export default function App() {
   };
 
   // Reset to default presets
-  const handleResetToDefaults = () => {
-    saveVerses(INITIAL_VERSES);
+  const handleResetToDefaults = async () => {
     saveStatuses({});
     setPinnedVerseId('');
     localStorage.removeItem('hagah_pinned_verse');
   };
 
-  const handleStartApp = (role: 'user' | 'pastor' | 'manager', userName?: string) => {
-    setIsAuthenticated(true);
-    setUserRole(role);
-    const finalName = userName || (role === 'pastor' ? '류정현 (학장교회 담임목사님)' : role === 'manager' ? '교회 관리자' : '성도');
-    setCurrentUserName(finalName);
-    sessionStorage.setItem('hagah_user_authenticated', 'true');
-    sessionStorage.setItem('hagah_user_role', role);
-    sessionStorage.setItem('hagah_user_name', finalName);
+  // Add Announcement
+  const handleAddAnnouncement = async (title: string, content: string, author?: string) => {
+    const finalAuthor = author || currentUserName || '관리자';
+    const newAnn: Announcement = {
+      id: `ann-${Date.now()}`,
+      title,
+      content,
+      author: finalAuthor,
+      date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+    };
 
-    // If logged in as pastor or manager, automatically authenticate the admin view too!
-    if (role === 'pastor' || role === 'manager') {
+    const updated = [newAnn, ...announcements];
+    setAnnouncements(updated);
+
+    if (isAdminAuthenticated) {
+      await saveAnnouncementToDb(newAnn);
+    }
+  };
+
+  // Delete Announcement
+  const handleDeleteAnnouncement = async (id: string) => {
+    const updated = announcements.filter(a => a.id !== id);
+    setAnnouncements(updated);
+
+    if (isAdminAuthenticated) {
+      await deleteAnnouncementFromDb(id);
+    }
+  };
+
+  const handleNewAnnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnnTitle.trim() || !newAnnContent.trim()) return;
+    await handleAddAnnouncement(newAnnTitle, newAnnContent, newAnnAuthor.trim());
+    setNewAnnTitle('');
+    setNewAnnContent('');
+    setNewAnnAuthor('');
+    setShowAddAnnForm(false);
+  };
+
+  const handleStartApp = (user: AppUser) => {
+    setIsAuthenticated(true);
+    setUserRole(user.role);
+    setCurrentUserId(user.id);
+    setCurrentUserName(user.name);
+    setCurrentUserPhone(user.phone || '');
+    
+    sessionStorage.setItem('hagah_user_authenticated', 'true');
+    sessionStorage.setItem('hagah_user_id', user.id);
+    sessionStorage.setItem('hagah_user_role', user.role);
+    sessionStorage.setItem('hagah_user_name', user.name);
+    sessionStorage.setItem('hagah_user_phone', user.phone || '');
+
+    // If logged in as master, pastor, or admin, automatically authenticate the admin view too!
+    if (user.role === 'master' || user.role === 'pastor' || user.role === 'admin') {
       setIsAdminAuthenticated(true);
       sessionStorage.setItem('hagah_admin_auth', 'true');
+    } else {
+      setIsAdminAuthenticated(false);
+      sessionStorage.removeItem('hagah_admin_auth');
     }
   };
 
@@ -803,7 +1012,22 @@ export default function App() {
               <h1 className="text-base sm:text-lg font-serif font-semibold tracking-tight text-[#5A5A40] flex items-center justify-center sm:justify-start gap-1.5">
                 학장교회 성경암송 <span className="text-[10px] sm:text-xs font-serif font-medium px-1.5 py-0.5 bg-[#F5F5F0] text-[#8A9A5B] border border-[#E9E3D8] rounded" title="말씀으로 하나님과 매일 만나는 나">만나</span>
               </h1>
-              <p className="text-[9px] sm:text-[10px] text-[#A0A090] font-sans">말씀으로 하나님과 매일 만나는 나 • 말씀중심 은혜중심</p>
+              <p className="text-[10px] text-[#7A7A6A] flex items-center justify-center sm:justify-start gap-1.5 mt-0.5 font-semibold">
+                <span>반갑습니다, <strong>{currentUserName}</strong>님</span>
+                <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                  userRole === 'master' ? 'bg-indigo-100 text-indigo-700' :
+                  userRole === 'pastor' ? 'bg-[#EAF2D7] text-[#8A9A5B]' :
+                  userRole === 'admin' ? 'bg-amber-100 text-amber-700' :
+                  userRole === 'member' ? 'bg-[#EAF2D7] text-[#8A9A5B]' :
+                  'bg-stone-100 text-stone-600 border border-stone-200'
+                }`}>
+                  {userRole === 'master' ? 'Master' :
+                   userRole === 'pastor' ? 'Pastor (목양)' :
+                   userRole === 'admin' ? 'Admin (콘텐츠)' :
+                   userRole === 'member' ? '정회원' :
+                   '게스트(Guest)'}
+                </span>
+              </p>
             </div>
           </div>
 
@@ -815,7 +1039,7 @@ export default function App() {
             </div>
 
             {/* MANAGER BUTTON */}
-            {(userRole === 'pastor' || userRole === 'manager') && (
+            {(userRole === 'pastor' || userRole === 'admin' || userRole === 'master') && (
               <button
                 onClick={() => {
                   const nextVal = !showManager;
@@ -836,12 +1060,16 @@ export default function App() {
 
             {/* MAIN LOGOUT BUTTON */}
             <button
-              onClick={() => {
+              onClick={async () => {
+                await appSignOut();
                 setIsAuthenticated(false);
                 setUserRole(null);
                 setIsAdminAuthenticated(false);
                 sessionStorage.removeItem('hagah_user_authenticated');
                 sessionStorage.removeItem('hagah_user_role');
+                sessionStorage.removeItem('hagah_user_id');
+                sessionStorage.removeItem('hagah_user_name');
+                sessionStorage.removeItem('hagah_user_phone');
                 sessionStorage.removeItem('hagah_admin_auth');
                 setShowManager(false);
               }}
@@ -852,6 +1080,13 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {!isSupabaseConfigured && (
+        <div className="bg-rose-50 border-b border-rose-200 py-3 px-4 text-center text-rose-800 text-xs font-bold font-sans flex items-center justify-center gap-2" id="supabase-disconnect-banner">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+          현재 서버에 연결할 수 없습니다.
+        </div>
+      )}
 
       {/* MAIN LAYOUT WRAPPER */}
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8" id="main-content-layout">
@@ -1030,7 +1265,41 @@ export default function App() {
 
             {/* DYNAMIC CONTENT AREA BASED ON SELECTED PILLAR */}
             <div className="pt-2">
-              {activeMainTab === 'personal' ? (
+              {isCommonDataLoading ? (
+                <div className="min-h-[300px] flex flex-col items-center justify-center space-y-4 bg-white border border-[#E9E3D8] rounded-[32px] p-8 shadow-sm">
+                  <div className="w-10 h-10 border-4 border-[#8A9A5B]/30 border-t-[#8A9A5B] rounded-full animate-spin"></div>
+                  <p className="text-sm font-medium text-[#7A7A6A] font-serif">학장교회 데이터를 불러오는 중입니다...</p>
+                </div>
+              ) : commonDataError ? (
+                <div className="min-h-[300px] flex flex-col items-center justify-center space-y-4 bg-white border border-[#E9E3D8] rounded-[32px] p-8 shadow-sm text-center">
+                  <p className="text-sm font-medium text-rose-500 font-sans">{commonDataError}</p>
+                  <button
+                    onClick={async () => {
+                      setIsCommonDataLoading(true);
+                      setCommonDataError(null);
+                      try {
+                        const dbVerses = await fetchVerses();
+                        setVerses(deduplicateVerses(dbVerses || []));
+                        const dbLessons = await fetchLessonsFromDb();
+                        setGongGwaLessons(dbLessons || []);
+                        const dbAnnouncements = await fetchAnnouncements();
+                        setAnnouncements(dbAnnouncements || []);
+                        const dbPrayers = await fetchPrayersFromDb();
+                        if (dbPrayers && dbPrayers.length > 0) {
+                          setPrayers(dbPrayers);
+                        }
+                      } catch (e) {
+                        setCommonDataError("학장교회 데이터를 불러오는 도중 오류가 발생했습니다. 네트워크 연결을 확인해 주세요.");
+                      } finally {
+                        setIsCommonDataLoading(false);
+                      }
+                    }}
+                    className="px-4 py-2 bg-[#8A9A5B] text-white text-xs font-bold rounded-xl shadow hover:bg-[#78884F] transition mt-2 cursor-pointer"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              ) : activeMainTab === 'personal' ? (
                 <PersonalFaithNote
                   verses={verses}
                   verseStatuses={verseStatuses}
@@ -1040,6 +1309,7 @@ export default function App() {
                   onStartBlankPractice={startBlankPractice}
                   onStartWriteTest={startWriteTest}
                   onStartSpeakAlong={startSpeakAlong}
+                  isGuest={userRole === 'guest'}
                 />
               ) : activeMainTab === 'gonggwa' ? (
                 <GongGwaPanel
@@ -1056,7 +1326,7 @@ export default function App() {
                   onIncrementAmen={handleIncrementAmen}
                   onUpdatePrayer={handleUpdatePrayer}
                   onTogglePrayerStatus={handleTogglePrayerStatus}
-                  isDemoUser={currentUserName === '테스트성도'}
+                  isDemoUser={currentUserName === '테스트성도' || userRole === 'guest'}
                 />
               ) : (
                 /* STANDARD DASHBOARD LIST VIEW */
@@ -1433,6 +1703,123 @@ export default function App() {
               </motion.div>
             )}
 
+            {/* ANNOUNCEMENTS SECTION (공지사항) */}
+            <div className="bg-white border border-[#E9E3D8] rounded-[32px] p-6 shadow-sm space-y-4" id="church-announcements-section">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold text-[#5A5A40] flex items-center gap-2">
+                  <Megaphone className="w-5 h-5 text-[#8A9A5B] fill-[#8A9A5B]/10" />
+                  교회 소식 및 공지사항 📢
+                </h3>
+                {isAdminAuthenticated && (
+                  <button
+                    onClick={() => setShowAddAnnForm(!showAddAnnForm)}
+                    className="px-3 py-1.5 bg-[#8A9A5B]/10 hover:bg-[#8A9A5B]/20 text-[#8A9A5B] rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    새 공지 작성
+                  </button>
+                )}
+              </div>
+
+              {/* Add Announcement Form (Only for authorized users) */}
+              {isAdminAuthenticated && showAddAnnForm && (
+                <motion.form
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  onSubmit={handleNewAnnSubmit}
+                  className="bg-[#FDFBF7] border border-[#E9E3D8] p-4 rounded-2xl space-y-3 font-sans"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-[#5A5A40]">공지 제목</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="공지사항 제목을 입력하세요."
+                        value={newAnnTitle}
+                        onChange={(e) => setNewAnnTitle(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-[#E9E3D8] rounded-xl text-xs text-[#4A4A4A] outline-none focus:border-[#8A9A5B]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-[#5A5A40]">작성자</label>
+                      <input
+                        type="text"
+                        placeholder={currentUserName || "관리자"}
+                        value={newAnnAuthor}
+                        onChange={(e) => setNewAnnAuthor(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-[#E9E3D8] rounded-xl text-xs text-[#4A4A4A] outline-none focus:border-[#8A9A5B]"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-[#5A5A40]">공지 내용</label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder="성도님들께 공지할 상세 내용을 입력하세요."
+                      value={newAnnContent}
+                      onChange={(e) => setNewAnnContent(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E9E3D8] rounded-xl text-xs text-[#4A4A4A] outline-none focus:border-[#8A9A5B] resize-none"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddAnnForm(false);
+                        setNewAnnTitle('');
+                        setNewAnnContent('');
+                      }}
+                      className="px-3 py-1.5 bg-[#F5F5F0] hover:bg-[#E9E3D8] text-[#5A5A40] rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                    >
+                      공지 등록하기
+                    </button>
+                  </div>
+                </motion.form>
+              )}
+
+              {/* Announcements List */}
+              <div className="space-y-3">
+                {announcements.length === 0 ? (
+                  <p className="text-xs text-[#A0A090] text-center py-4 italic">등록된 공지사항이 없습니다.</p>
+                ) : (
+                  announcements.map((ann) => (
+                    <div
+                      key={ann.id}
+                      className="p-4 bg-[#F9F7F2]/50 border border-[#E9E3D8]/40 rounded-2xl hover:bg-[#F9F7F2] transition relative"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-[#5A5A40]">{ann.title}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[#A0A090] font-sans font-semibold">{ann.date}</span>
+                          {isAdminAuthenticated && (
+                            <button
+                              onClick={() => handleDeleteAnnouncement(ann.id)}
+                              className="text-rose-400 hover:text-rose-600 transition p-0.5 cursor-pointer"
+                              title="삭제"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-[#4A4A4A] leading-relaxed font-sans whitespace-pre-line">
+                        {ann.content}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {/* TAB FILTERS FOR QUARTERS (분기별 탭 필터) */}
             <div className="flex flex-wrap justify-between items-center gap-4 border-b border-[#E9E3D8] pb-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -1490,7 +1877,12 @@ export default function App() {
 
             {/* VERSE CARD GRID CONTAINER */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="verse-card-grid">
-              {sortedVerses.map((verse) => {
+              {sortedVerses.length === 0 ? (
+                <div className="col-span-full py-12 text-center bg-white border border-[#E9E3D8] rounded-[32px] p-8 shadow-sm">
+                  <p className="text-sm font-medium text-[#7A7A6A] font-serif">등록된 내용이 없습니다.</p>
+                </div>
+              ) : (
+                sortedVerses.map((verse) => {
                 const statusInfo = verseStatuses[verse.id] || {
                   verseId: verse.id,
                   status: 'not_started',
@@ -1765,7 +2157,7 @@ export default function App() {
                     )}
                   </motion.div>
                 );
-              })}
+              }))}
             </div>
 
             {/* TEST ATTEMPTS HISTORY TAB */}

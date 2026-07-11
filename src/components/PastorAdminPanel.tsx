@@ -1,37 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { Users, TrendingUp, ArrowUpDown, Search, Award, Plus, Trash2, FileSpreadsheet, Check, RefreshCw, Lock } from 'lucide-react';
 import { SaintProgress } from '../types';
+import { fetchSaintsProgressFromDb, saveSaintProgressToDb, deleteSaintFromDb, isSupabaseConfigured } from '../lib/supabase';
 
 interface PastorAdminPanelProps {
   totalVersesCount: number;
+  currentUserRole?: string;
   onClose?: () => void;
 }
 
-export default function PastorAdminPanel({ totalVersesCount, onClose }: PastorAdminPanelProps) {
-  // Load saints from localStorage, default to empty list (deleting original mock names)
-  const [saints, setSaints] = useState<SaintProgress[]>(() => {
-    const saved = localStorage.getItem('manna_saints');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+export default function PastorAdminPanel({ totalVersesCount, currentUserRole = 'pastor', onClose }: PastorAdminPanelProps) {
+  const [saints, setSaints] = useState<SaintProgress[]>([]);
   const [newName, setNewName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<'name' | 'achievementRate' | 'lastActivity'>('achievementRate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Sync to localStorage
+  // Load saints progress from Supabase / localStorage based on configuration
+  const loadSaints = async () => {
+    if (currentUserRole === 'admin') return;
+    setIsLoading(true);
+    try {
+      const data = await fetchSaintsProgressFromDb(currentUserRole as any);
+      setSaints(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem('manna_saints', JSON.stringify(saints));
-  }, [saints]);
+    loadSaints();
+  }, [currentUserRole]);
 
   // Add new saint
-  const handleAddSaint = (e: React.FormEvent) => {
+  const handleAddSaint = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
+    const newId = `saint-${Date.now()}`;
     const newSaint: SaintProgress = {
-      id: Date.now().toString(),
+      id: newId,
       name: newName.trim(),
       completedCount: 0,
       totalCount: totalVersesCount || 12,
@@ -46,21 +58,35 @@ export default function PastorAdminPanel({ totalVersesCount, onClose }: PastorAd
     setSaints(prev => [newSaint, ...prev]);
     setNewName('');
     triggerSaveAlert();
+
+    // Save to DB / Storage
+    await saveSaintProgressToDb(newSaint);
+    // Sync back
+    const local = localStorage.getItem('manna_saints');
+    const localSaints = local ? JSON.parse(local) : [];
+    localStorage.setItem('manna_saints', JSON.stringify([newSaint, ...localSaints]));
   };
 
   // Delete saint
-  const handleDeleteSaint = (id: string) => {
+  const handleDeleteSaint = async (id: string) => {
     setSaints(prev => prev.filter(s => s.id !== id));
     triggerSaveAlert();
+
+    await deleteSaintFromDb(id);
+    const local = localStorage.getItem('manna_saints');
+    if (local) {
+      const updated = JSON.parse(local).filter((s: any) => s.id !== id);
+      localStorage.setItem('manna_saints', JSON.stringify(updated));
+    }
   };
 
-  // Adjust completed count
-  const handleAdjustCount = (id: string, delta: number) => {
-    setSaints(prev => prev.map(s => {
+  // Adjust completed count (Manual Input for Text/SMS)
+  const handleAdjustCount = async (id: string, delta: number) => {
+    const updatedSaints = saints.map(s => {
       if (s.id !== id) return s;
       const nextTotal = totalVersesCount || s.totalCount || 12;
       const nextCount = Math.max(0, Math.min(nextTotal, s.completedCount + delta));
-      return {
+      const nextSaint = {
         ...s,
         completedCount: nextCount,
         totalCount: nextTotal,
@@ -71,7 +97,18 @@ export default function PastorAdminPanel({ totalVersesCount, onClose }: PastorAd
           day: '2-digit'
         }).replace(/\. /g, '.').slice(0, -1)
       };
-    }));
+
+      // Async write to db
+      saveSaintProgressToDb(nextSaint);
+
+      return nextSaint;
+    });
+
+    setSaints(updatedSaints);
+    triggerSaveAlert();
+
+    // Save to local storage sync
+    localStorage.setItem('manna_saints', JSON.stringify(updatedSaints));
   };
 
   const triggerSaveAlert = () => {
@@ -125,6 +162,32 @@ export default function PastorAdminPanel({ totalVersesCount, onClose }: PastorAd
   };
 
   const filteredSaints = saints.filter(s => s.name.includes(searchQuery));
+
+  if (currentUserRole === 'admin') {
+    return (
+      <div className="bg-white rounded-[28px] p-8 border border-rose-100 space-y-6 shadow-sm text-center">
+        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto border border-rose-100">
+          <Lock className="w-6 h-6" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-base font-serif font-bold text-[#5A5A40]">조회 권한 제한됨 🔒</h3>
+          <p className="text-xs text-[#7A7A6A] max-w-md mx-auto leading-relaxed">
+            성도들의 개인 학습 기록과 양육 점검표는 <strong>담임목사(Pastor) 및 마스터(Master)</strong> 권한 전용 데이터입니다. <br />
+            일반 콘텐츠 관리자(Admin) 계정은 이 정보를 열람하실 수 없습니다.
+          </p>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-[#F5F5F0] hover:bg-[#E9E3D8] text-[#5A5A40] border border-[#E9E3D8] rounded-xl text-xs font-bold transition cursor-pointer mx-auto"
+          >
+            뒤로 가기
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-[28px] p-6 border border-[#E9E3D8] space-y-6 shadow-sm font-sans">

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BookMarked, ShieldCheck, UserPlus, LogIn, Sparkles, X } from 'lucide-react';
+import { BookMarked, ShieldCheck, UserPlus, LogIn, Sparkles, X, Heart } from 'lucide-react';
+import { appSignIn, appSignUp, isSupabaseConfigured, AppUser, supabase } from '../lib/supabase';
 
 interface MainLandingProps {
-  onStart: (role: 'user' | 'pastor' | 'manager', userName?: string) => void;
+  onStart: (user: AppUser) => void;
 }
 
 export default function MainLanding({ onStart }: MainLandingProps) {
@@ -11,89 +12,60 @@ export default function MainLanding({ onStart }: MainLandingProps) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState(() => {
+    return !isSupabaseConfigured ? '현재 서버에 연결할 수 없습니다.' : '';
+  });
   const [showFindModal, setShowFindModal] = useState(false);
   const [findResult, setFindResult] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleStartGuest = () => {
+    onStart({
+      id: 'guest',
+      email: 'guest@church.com',
+      name: '게스트 성도',
+      role: 'guest'
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setIsLoading(true);
 
-    // 목사님 계정 로그인 판별 규칙 (기본 pastor1234, 백업용 hakjang1004)
-    const savedPastorPw = localStorage.getItem('hagah_pastor_password') || 'pastor1234';
-    if ((email === 'pastor' || email === 'pastor@church.com') && (password === savedPastorPw || password === 'hakjang1004')) {
-      onStart('pastor', '류정현 (학장교회 담임목사님)');
-      return;
-    }
-
-    // 관리자 계정 로그인 판별 규칙 (기본 admin1234, 백업용 hakjang1004)
-    const savedManagerPw = localStorage.getItem('hagah_manager_password') || 'admin1234';
-    if ((email === 'admin' || email === 'admin@church.com' || email === 'manager' || email === 'manager@church.com') && (password === savedManagerPw || password === 'hakjang1004')) {
-      onStart('manager', '교회 관리자');
-      return;
-    }
-
-    if (isLogin) {
-      // Default testing credentials support
-      if ((email === 'test@church.com' || email === 'test') && password === 'test1234') {
-        onStart('user', '테스트성도');
-        return;
-      }
-
-      const dbRaw = localStorage.getItem('manna_users_db');
-      const users = dbRaw ? JSON.parse(dbRaw) : [];
-      const foundUser = users.find((u: any) => (u.email === email || u.username === email) && u.password === password);
-
-      if (foundUser) {
-        onStart('user', foundUser.name);
+    try {
+      if (isLogin) {
+        // Sign In
+        const { user, error } = await appSignIn(email, password);
+        if (error) {
+          setErrorMsg(error);
+        } else if (user) {
+          onStart(user);
+        }
       } else {
-        setErrorMsg('가입되지 않은 아이디(이메일)이거나 비밀번호가 올바르지 않습니다. (체험은 아이디: test / 비밀번호: test1234 로 가능합니다)');
-      }
-    } else {
-      // 회원가입할 때 이름과 전화번호는 꼭 넣도록 세팅
-      if (!name.trim()) {
-        setErrorMsg('성도 성함을 반드시 입력해 주세요.');
-        return;
-      }
-      if (!phone.trim()) {
-        setErrorMsg('휴대전화 번호를 반드시 입력해 주세요.');
-        return;
-      }
+        // Sign Up
+        if (!name.trim()) {
+          setErrorMsg('성도 성함을 반드시 입력해 주세요.');
+          setIsLoading(false);
+          return;
+        }
+        if (!phone.trim()) {
+          setErrorMsg('휴대전화 번호를 반드시 입력해 주세요.');
+          setIsLoading(false);
+          return;
+        }
 
-      const dbRaw = localStorage.getItem('manna_users_db');
-      const users = dbRaw ? JSON.parse(dbRaw) : [];
-      const exists = users.some((u: any) => (u.email === email || u.username === email));
-
-      if (exists) {
-        setErrorMsg('이미 존재하는 아이디입니다.');
-        return;
+        const { user, error } = await appSignUp(name.trim(), phone.trim(), email.trim(), password);
+        if (error) {
+          setErrorMsg(error);
+        } else if (user) {
+          onStart(user);
+        }
       }
-
-      // 새 성도 등록
-      const newUser = { email, username: email, password, name, phone, role: 'user' };
-      users.push(newUser);
-      localStorage.setItem('manna_users_db', JSON.stringify(users));
-
-      // 또한 성도관리 목록(manna_saints)에 자동 연동 추가
-      const saintsRaw = localStorage.getItem('manna_saints');
-      const saints = saintsRaw ? JSON.parse(saintsRaw) : [];
-      if (!saints.some((s: any) => s.name === name)) {
-        saints.push({
-          id: `saint-${Date.now()}`,
-          name: name.trim(),
-          completedCount: 0,
-          totalCount: 12,
-          achievementRate: 0,
-          lastActivity: new Date().toLocaleDateString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          }).replace(/\. /g, '.').slice(0, -1)
-        });
-        localStorage.setItem('manna_saints', JSON.stringify(saints));
-      }
-
-      onStart('user', name);
+    } catch (err: any) {
+      setErrorMsg(err.message || '요청 처리 중 문제가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -198,7 +170,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
             {isLogin ? (
               <>
                 {/* 체험 계정 안내 배너 */}
-                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-xl p-3 space-y-1.5 animate-fadeIn">
+                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-xl p-3 space-y-2.5 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-extrabold text-[#5A5A40] flex items-center gap-1">
                       💡 회원가입 없이 즉시 체험하기
@@ -214,13 +186,27 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                       자동 입력 ⚡
                     </button>
                   </div>
-                  <div className="text-[10px] text-stone-600 space-y-0.5 font-sans leading-relaxed">
+                  <div className="text-[10px] text-stone-600 space-y-1 font-sans leading-relaxed">
                     <p>
                       <strong>아이디:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test</code> &nbsp;/&nbsp; 
                       <strong>비밀번호:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test1234</code>
                     </p>
-                    <p className="text-[9.5px] text-[#7A7A6A] leading-normal pt-0.5">
+                    <p className="text-[9.5px] text-[#7A7A6A] leading-normal">
                       ※ 체험 계정(테스트성도)은 말씀 암송 성취도 개별 기록, 나만의 묵상 노트 및 중보기도 올리기 등의 등록·수정 권한이 일부 제한되어 있으니 둘러보신 후 개별 가입을 권장합니다.
+                    </p>
+                  </div>
+                  
+                  <div className="border-t border-[#8A9A5B]/10 pt-2 flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleStartGuest}
+                      className="w-full py-2 bg-gradient-to-r from-[#8A9A5B] to-[#5A5A40] hover:opacity-95 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                      게스트(체험) 모드로 바로 들어가기
+                    </button>
+                    <p className="text-[9px] text-[#7A7A6A] text-center font-sans">
+                      (게스트 모드로 작성된 내용은 새로고침이나 로그아웃 시 즉시 사라집니다)
                     </p>
                   </div>
                 </div>
@@ -351,25 +337,43 @@ export default function MainLanding({ onStart }: MainLandingProps) {
             </p>
 
             <form 
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 const form = e.currentTarget;
                 const nameVal = (form.elements[0] as HTMLInputElement).value.trim();
                 const phoneVal = (form.elements[1] as HTMLInputElement).value.trim();
                 
-                const dbRaw = localStorage.getItem('manna_users_db');
-                const users = dbRaw ? JSON.parse(dbRaw) : [];
-                
-                // Compare after stripping special chars (e.g., hiphens) to be resilient to formats
-                const found = users.find((u: any) => 
-                  u.name === nameVal && 
-                  u.phone.replace(/[^0-9]/g, '') === phoneVal.replace(/[^0-9]/g, '')
-                );
-                
-                if (found) {
-                  setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n비밀번호: ${found.password}\n\n위 계정 정보로 로그인해 주십시오.`);
-                } else {
-                  setFindResult(`등록된 성도 정보 없음 ❌\n\n입력하신 성함(${nameVal})과 연락처(${phoneVal})로 일치하는 가입 정보를 찾지 못했습니다.\n\n정확한 본명과 전화번호를 기입해 보시거나 새로 가입해 주세요.`);
+                if (!isSupabaseConfigured || !supabase) {
+                  setFindResult("현재 서버에 연결할 수 없어 계정을 조회할 수 없습니다.");
+                  return;
+                }
+
+                try {
+                  // Clean hyphens or special characters from input phone to ensure resilient lookup
+                  const cleanPhoneInput = phoneVal.replace(/[^0-9]/g, '');
+
+                  // Query profiles
+                  const { data: profiles, error } = await supabase
+                    .from('profiles')
+                    .select('email, name, phone');
+
+                  if (error) {
+                    setFindResult(`조회 중 오류가 발생했습니다: ${error.message}`);
+                    return;
+                  }
+
+                  const found = profiles?.find((p: any) => 
+                    p.name === nameVal && 
+                    (p.phone || '').replace(/[^0-9]/g, '') === cleanPhoneInput
+                  );
+
+                  if (found) {
+                    setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n\n※ 개인정보 보호 및 보안을 위해 비밀번호는 직접 제공되지 않습니다. 분실 시 목양실이나 말씀 암송 담당자분께 연락하여 비밀번호 재설정/초기화를 요청해 주세요.`);
+                  } else {
+                    setFindResult(`등록된 성도 정보 없음 ❌\n\n입력하신 성함(${nameVal})과 연락처(${phoneVal})로 일치하는 가입 정보를 찾지 못했습니다.\n\n정확한 본명과 전화번호를 기입해 보시거나 새로 가입해 주세요.`);
+                  }
+                } catch (err: any) {
+                  setFindResult("조회 중 네트워크 오류가 발생했습니다.");
                 }
               }}
               className="space-y-3"

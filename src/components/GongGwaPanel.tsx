@@ -47,7 +47,7 @@ export default function GongGwaPanel({
   const [activeSubTab, setActiveSubTab] = useState<'full_text' | 'passage' | 'lessons'>('full_text');
 
   // Dynamic lesson selection state
-  const [selectedLessonId, setSelectedLessonId] = useState<string>('gonggwa-7');
+  const [selectedLessonId, setSelectedLessonId] = useState<string>('');
 
   // Blur / Hide practice states for full textbook study
   const [blurIntro, setBlurIntro] = useState(false);
@@ -70,19 +70,26 @@ export default function GongGwaPanel({
   // Q&A card flip state
   const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
 
+  React.useEffect(() => {
+    if (gongGwaLessons.length > 0 && (!selectedLessonId || !gongGwaLessons.some(g => g.id === selectedLessonId))) {
+      setSelectedLessonId(gongGwaLessons[0].id);
+    }
+  }, [gongGwaLessons, selectedLessonId]);
+
+  if (gongGwaLessons.length === 0) {
+    return (
+      <div className="min-h-[300px] flex flex-col items-center justify-center space-y-4 bg-white border border-[#E9E3D8] rounded-[32px] p-8 shadow-sm text-center">
+        <BookOpen className="w-8 h-8 text-[#A0A090]" />
+        <p className="text-sm font-medium text-[#7A7A6A] font-serif">등록된 공과 내용이 없습니다.</p>
+      </div>
+    );
+  }
+
   const formatGongGwaTitle = (title: string) => {
     return title.replace(/제\s*(\d+)\s*과/g, '$1공과');
   };
 
-  const currentGongGwa = gongGwaLessons.find(g => g.id === selectedLessonId) || gongGwaLessons[0] || {
-    id: 'gonggwa-empty',
-    title: '공과가 없습니다',
-    scriptureReference: '',
-    verses: [],
-    coreLessons: [],
-    qnas: [],
-    introduction: []
-  };
+  const currentGongGwa = gongGwaLessons.find(g => g.id === selectedLessonId) || gongGwaLessons[0];
 
   const lessonTitle = formatGongGwaTitle(currentGongGwa.title);
   const scriptureReference = currentGongGwa.scriptureReference;

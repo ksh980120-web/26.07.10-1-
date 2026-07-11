@@ -29,6 +29,7 @@ import {
 import { Verse, VerseStatus, MemorizeStatus, FaithJournalEntry, PrayerEntry } from '../types';
 
 interface PersonalFaithNoteProps {
+  isGuest?: boolean;
   verses: Verse[];
   verseStatuses: { [key: string]: VerseStatus };
   onAddPersonalVerse: (verse: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => void;
@@ -42,6 +43,7 @@ interface PersonalFaithNoteProps {
 type TabType = 'journal' | 'verse' | 'prayer';
 
 export default function PersonalFaithNote({
+  isGuest = false,
   verses,
   verseStatuses,
   onAddPersonalVerse,
@@ -87,6 +89,30 @@ export default function PersonalFaithNote({
 
   // --- LOAD INITIAL DATA ---
   useEffect(() => {
+    if (isGuest) {
+      // Guest mode starts with a default welcome entry so they can experience the notebook
+      const welcomeJournal: FaithJournalEntry = {
+        id: 'welcome-journal',
+        date: new Date().toLocaleDateString('ko-KR').slice(0, -1),
+        category: '개인묵상',
+        title: '[체험] 은혜로운 말씀 묵상 기록하기 (저장 불가)',
+        passage: '시편 1:2',
+        content: '여기에 말씀 묵상이나 예배 설교 노트를 자유롭게 작성해 보실 수 있습니다.\n\n※ 게스트 모드에서는 페이지를 새로고침하거나 로그아웃 시 작성한 모든 신앙 성장 기록이 사라집니다. 나만의 전용 신앙 노트를 안전하게 보관하시려면, 우측 상단에서 로그아웃 하신 후 정식 회원으로 가입하여 이용해 보시기 바랍니다!',
+        prayer: '주여, 주의 율법을 주야로 즐겁게 읊조리며 그 교훈을 마음에 꼭 새겨 순종하는 복된 삶이 되게 인도하옵소서.'
+      };
+      setJournals([welcomeJournal]);
+
+      const welcomePrayer: PrayerEntry = {
+        id: 'welcome-prayer',
+        title: '[체험] 오늘 하루의 기도제목 (저장 불가)',
+        content: '학장교회 성도님들과 혹은 개인적으로 하나님께 드리는 간절한 기도제목을 적어 체험해 보세요.\n\n※ 게스트 모드(체험 계정)에서는 기기의 임시 메모리에만 보관되므로, 새로고침이나 로그아웃 시 초기화됩니다.',
+        dateAdded: new Date().toLocaleDateString('ko-KR').slice(0, -1),
+        isAnswered: false
+      };
+      setPrayers([welcomePrayer]);
+      return;
+    }
+
     // Load journals
     const savedJournals = localStorage.getItem('hagah_journals');
     if (savedJournals) {
@@ -102,12 +128,14 @@ export default function PersonalFaithNote({
         setPrayers(JSON.parse(savedPrayers));
       } catch (e) {}
     }
-  }, []);
+  }, [isGuest]);
 
   // --- JOURNAL CRUD ---
   const saveJournalsToStorage = (updated: FaithJournalEntry[]) => {
     setJournals(updated);
-    localStorage.setItem('hagah_journals', JSON.stringify(updated));
+    if (!isGuest) {
+      localStorage.setItem('hagah_journals', JSON.stringify(updated));
+    }
   };
 
   const handleOpenNewJournal = () => {
@@ -280,6 +308,19 @@ export default function PersonalFaithNote({
 
   return (
     <div className="space-y-6" id="personal-faith-notebook">
+      {isGuest && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-900 shadow-xs animate-fadeIn">
+          <span className="text-xl">⚠️</span>
+          <div className="space-y-1 text-xs">
+            <h4 className="font-bold font-serif text-[#5A5A40]">체험 중인 게스트 모드 안내</h4>
+            <p className="text-[#7A7A6A] leading-relaxed">
+              현재 <strong>게스트(체험) 모드</strong>로 이용 중이십니다. 작성하시는 모든 설교/묵상 노트, 나만의 암송구절 및 기도제목은 <strong>브라우저를 새로고침하거나 로그아웃 시 즉시 삭제</strong>됩니다. 
+              소중한 신앙 성장 데이터를 정식으로 저장하고 동기화하시려면 오른쪽 위 <strong>로그아웃</strong> 후 개별 성도 가입을 완료해 주세요!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* SECTION CARD HEADER */}
       <div className="bg-white border border-[#E9E3D8] rounded-[32px] p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">

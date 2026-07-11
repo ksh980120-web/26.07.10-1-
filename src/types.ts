@@ -13,6 +13,9 @@ export interface Verse {
   date?: string;
   isCustom?: boolean;
   isPersonal?: boolean;
+  title?: string;
+  duration?: string;
+  isActive?: boolean;
 }
 
 export type MemorizeStatus = 'not_started' | 'memorizing' | 'completed';
@@ -114,4 +117,14 @@ export interface AnonymousPrayer {
   isAnonymous?: boolean;
   authorName?: string;
 }
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  author?: string;
+  date: string;
+  created_at?: string;
+}
+
 

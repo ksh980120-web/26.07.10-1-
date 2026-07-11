@@ -113,7 +113,7 @@ interface ManagerPanelProps {
   pinnedMonthVerseId?: string;
   onPinVerse?: (id: string) => void;
   onPinMonthVerse?: (id: string) => void;
-  userRole?: 'pastor' | 'manager';
+  userRole?: 'master' | 'pastor' | 'admin' | 'member' | 'guest' | 'manager';
   gongGwaLessons: GongGwa[];
   onUpdateGongGwaLessons: (lessons: GongGwa[]) => void;
   prayers: AnonymousPrayer[];
@@ -144,7 +144,7 @@ export default function ManagerPanel({
 }: ManagerPanelProps) {
   // Navigation / Tab state for the right column
   const [rightTab, setRightTab] = useState<'groups' | 'prayers_manage' | 'saints' | 'gonggwa_manage'>(
-    userRole === 'manager' ? 'gonggwa_manage' : 'groups'
+    userRole === 'manager' || userRole === 'admin' ? 'gonggwa_manage' : 'groups'
   );
 
   // Prayer management states
@@ -558,14 +558,16 @@ export default function ManagerPanel({
               <Heart className="w-3.5 h-3.5 text-[#8A9A5B]" />
               중보기도 관리
             </button>
-            <button
-              type="button"
-              onClick={() => setRightTab('saints')}
-              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'saints' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-[#8A9A5B]" />
-              성도 성과 관리
-            </button>
+            {userRole !== 'manager' && userRole !== 'admin' && (
+              <button
+                type="button"
+                onClick={() => setRightTab('saints')}
+                className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${rightTab === 'saints' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#7A7A6A] hover:bg-white/50'}`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-[#8A9A5B]" />
+                성도 성과 관리
+              </button>
+            )}
           </div>
 
           {/* Tab 1: Groups (소그룹 말씀 나눔 질문지 생성기) */}
@@ -1127,7 +1129,7 @@ export default function ManagerPanel({
 
           {/* Tab 3: Saint Performance Management (성도별 성과 관리) */}
           {rightTab === 'saints' && (
-            <PastorAdminPanel totalVersesCount={verses.length} />
+            <PastorAdminPanel totalVersesCount={verses.length} currentUserRole={userRole} />
           )}
         </div>
       </div>

@@ -127,4 +127,15 @@ export interface Announcement {
   created_at?: string;
 }
 
+export interface VerseSubmission {
+  id: string;
+  userId: string;
+  userName?: string;
+  weeklyVerseId: string;
+  verseReference?: string;
+  verseText?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+}
+
 

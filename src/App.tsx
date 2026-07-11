@@ -34,7 +34,7 @@ import {
   X
 } from 'lucide-react';
 
-import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa, AnonymousPrayer, Announcement } from './types';
+import { Verse, VerseStatus, MemorizeStatus, TestAttempt, GongGwa, AnonymousPrayer, Announcement, VerseSubmission } from './types';
 import BlankPractice from './components/BlankPractice';
 import WriteTest from './components/WriteTest';
 import ManagerPanel from './components/ManagerPanel';
@@ -64,7 +64,11 @@ import {
   saveAnnouncementToDb,
   deleteAnnouncementFromDb,
   onAuthStateChange,
-  appSignOut
+  appSignOut,
+  submitVerseToPastor,
+  fetchSubmissions,
+  updateSubmissionStatus,
+  fetchUserSubmissions
 } from './lib/supabase';
 
 export default function App() {
@@ -82,6 +86,11 @@ export default function App() {
   const [newAnnTitle, setNewAnnTitle] = useState('');
   const [newAnnContent, setNewAnnContent] = useState('');
   const [newAnnAuthor, setNewAnnAuthor] = useState('');
+  
+  // Weekly verse submissions state
+  const [userSubmissions, setUserSubmissions] = useState<VerseSubmission[]>([]);
+  const [submissionLoading, setSubmissionLoading] = useState<{ [verseId: string]: boolean }>({});
+  const [submissionError, setSubmissionError] = useState<{ [verseId: string]: string | null }>({});
   
   const [isCommonDataLoading, setIsCommonDataLoading] = useState<boolean>(true);
   const [commonDataError, setCommonDataError] = useState<string | null>(null);
@@ -370,6 +379,7 @@ export default function App() {
       if (!isAuthenticated || userRole === 'guest' || !currentUserId) {
         setVerseStatuses({});
         setAttempts([]);
+        setUserSubmissions([]);
         return;
       }
 
@@ -380,6 +390,10 @@ export default function App() {
       // Load Attempts
       const dbAttempts = await fetchUserAttempts(currentUserId);
       setAttempts(dbAttempts);
+
+      // Load Submissions
+      const dbSubs = await fetchUserSubmissions(currentUserId);
+      setUserSubmissions(dbSubs);
     };
 
     loadUserSpecificData();
@@ -465,6 +479,29 @@ export default function App() {
       if (currentUserId && updatedAttempts.length > 0) {
         await saveAttemptToDb(currentUserId, updatedAttempts[0]);
       }
+    }
+  };
+
+  const handleSubmitVerseToPastor = async (weeklyVerseId: string) => {
+    if (!currentUserId) return;
+    
+    setSubmissionError(prev => ({ ...prev, [weeklyVerseId]: null }));
+    setSubmissionLoading(prev => ({ ...prev, [weeklyVerseId]: true }));
+    
+    try {
+      const res = await submitVerseToPastor(currentUserId, weeklyVerseId);
+      if (res.success) {
+        // Reload submissions
+        const dbSubs = await fetchUserSubmissions(currentUserId);
+        setUserSubmissions(dbSubs);
+      } else {
+        setSubmissionError(prev => ({ ...prev, [weeklyVerseId]: res.message || '제출 도중 오류가 발생했습니다.' }));
+      }
+    } catch (e: any) {
+      console.error(e);
+      setSubmissionError(prev => ({ ...prev, [weeklyVerseId]: '네트워크 오류가 발생했습니다.' }));
+    } finally {
+      setSubmissionLoading(prev => ({ ...prev, [weeklyVerseId]: false }));
     }
   };
 
@@ -2082,6 +2119,61 @@ export default function App() {
                               >
                                 🎉 오늘도 고생했어요! 정말 멋지세요!
                               </motion.div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Pastor Submission Section */}
+                      {(() => {
+                        const sub = userSubmissions.find(s => s.weeklyVerseId === verse.id);
+                        const statusInfo = verseStatuses[verse.id] || { status: 'not_started' };
+                        const isLoading = submissionLoading[verse.id];
+                        const errorMsg = submissionError[verse.id];
+
+                        if (statusInfo.status !== 'completed' && !sub) return null;
+
+                        return (
+                          <div className="mt-3.5 p-3.5 bg-stone-50 rounded-2xl border border-stone-200/60 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10.5px] font-bold text-stone-600">목사님 제출 상태</span>
+                              {sub ? (
+                                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                                  sub.status === 'approved' 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                    : sub.status === 'rejected'
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  {sub.status === 'approved' 
+                                    ? '승인 완료 ✨' 
+                                    : sub.status === 'rejected'
+                                      ? '다시 암송해주세요 ✍️'
+                                      : '제출 대기 ⏳'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-medium text-stone-400">제출 안 됨</span>
+                              )}
+                            </div>
+
+                            {errorMsg && (
+                              <p className="text-[10px] text-rose-500 font-medium">{errorMsg}</p>
+                            )}
+
+                            {(!sub || sub.status === 'rejected') && (
+                              <button
+                                onClick={() => handleSubmitVerseToPastor(verse.id)}
+                                disabled={isLoading}
+                                className="w-full py-2 bg-[#8A9A5B] hover:bg-[#7A8A4B] disabled:bg-stone-300 disabled:cursor-not-allowed text-white rounded-xl text-[11px] font-extrabold shadow-sm transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                {isLoading ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                ) : sub?.status === 'rejected' ? (
+                                  '다시 암송하여 목사님께 제출 ⛪'
+                                ) : (
+                                  '목사님께 제출 ⛪'
+                                )}
+                              </button>
                             )}
                           </div>
                         );

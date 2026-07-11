@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Verse, VerseStatus, TestAttempt, FaithJournalEntry, PrayerEntry, SaintProgress, MemorizeStatus, AnonymousPrayer, GongGwa, Announcement } from '../types';
+import { Verse, VerseStatus, TestAttempt, FaithJournalEntry, PrayerEntry, SaintProgress, MemorizeStatus, AnonymousPrayer, GongGwa, Announcement, VerseSubmission } from '../types';
 
 // 1. 체크 및 안전한 초기화
 const metaEnv = (import.meta as any).env || {};
@@ -736,4 +736,281 @@ export async function updateSaintCompletedCountInDb(saintId: string, count: numb
   // 진도 상태는 progress 테이블에 upsert 시 자동으로 동적 계산되므로, 
   // 여기서는 중복 디스크 정합성 방지를 위해 단순 성공 승인 처리만 실행합니다.
   return true;
+}
+
+// ========================================================
+// 3-8. VERSE SUBMISSIONS FOR PASTOR APPROVAL
+// ========================================================
+
+export async function submitVerseToPastor(userId: string, weeklyVerseId: string): Promise<{ success: boolean; message?: string }> {
+  const uuidUser = toUUID(userId);
+  const uuidVerse = toUUID(weeklyVerseId);
+  
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // Duplication check
+      const { data: existing, error: checkError } = await supabase
+        .from('submissions')
+        .select('id, status')
+        .eq('user_id', uuidUser)
+        .eq('weekly_verse_id', uuidVerse);
+      
+      if (!checkError && existing && existing.length > 0) {
+        const hasPending = existing.some(s => s.status === 'pending');
+        const hasApproved = existing.some(s => s.status === 'approved');
+        if (hasPending) {
+          return { success: false, message: '이미 제출된 암송 구절이며 승인 대기 중입니다.' };
+        }
+        if (hasApproved) {
+          return { success: false, message: '이미 승인 완료된 암송 구절입니다.' };
+        }
+      }
+
+      const payload = {
+        user_id: uuidUser,
+        weekly_verse_id: uuidVerse,
+        status: 'pending',
+        submitted_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase.from('submissions').insert(payload);
+      if (error) throw error;
+      return { success: true };
+    } catch (e: any) {
+      console.error('Error submitting verse:', e);
+      return { success: false, message: e.message || '제출 도중 오류가 발생했습니다.' };
+    }
+  }
+
+  // Fallback to localStorage
+  const localKey = 'hagah_verse_submissions';
+  const submissions: VerseSubmission[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+  
+  const hasPending = submissions.some(s => s.userId === userId && s.weeklyVerseId === weeklyVerseId && s.status === 'pending');
+  const hasApproved = submissions.some(s => s.userId === userId && s.weeklyVerseId === weeklyVerseId && s.status === 'approved');
+  
+  if (hasPending) {
+    return { success: false, message: '이미 제출된 암송 구절이며 승인 대기 중입니다.' };
+  }
+  if (hasApproved) {
+    return { success: false, message: '이미 승인 완료된 암송 구절입니다.' };
+  }
+
+  // Find user name and verse info from local storage
+  let userName = '성도';
+  try {
+    const userJson = localStorage.getItem('hagah_current_user') || localStorage.getItem('manna_saints');
+    if (userJson) {
+      const parsed = JSON.parse(userJson);
+      userName = parsed.name || '성도';
+    }
+  } catch (err) {}
+
+  const newSub: VerseSubmission = {
+    id: `sub-${Date.now()}`,
+    userId,
+    userName,
+    weeklyVerseId,
+    status: 'pending',
+    submittedAt: new Date().toISOString()
+  };
+  
+  submissions.push(newSub);
+  localStorage.setItem(localKey, JSON.stringify(submissions));
+  return { success: true };
+}
+
+export async function fetchSubmissions(): Promise<VerseSubmission[]> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('submissions')
+        .select(`
+          id,
+          user_id,
+          weekly_verse_id,
+          status,
+          submitted_at
+        `)
+        .order('submitted_at', { ascending: false });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, name');
+        const { data: verses } = await supabase.from('weekly_verses').select('id, reference, text');
+        
+        const profileMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
+        const verseMap = new Map(verses?.map(v => [v.id, v]) || []);
+        
+        return data.map(d => {
+          const v = verseMap.get(d.weekly_verse_id);
+          return {
+            id: d.id,
+            userId: d.user_id,
+            userName: profileMap.get(d.user_id) || '성도',
+            weeklyVerseId: d.weekly_verse_id,
+            verseReference: v?.reference || '알 수 없는 성구',
+            verseText: v?.text || '',
+            status: d.status as 'pending' | 'approved' | 'rejected',
+            submittedAt: d.submitted_at
+          };
+        });
+      }
+      return [];
+    } catch (e) {
+      console.error('Error fetching submissions from DB:', e);
+    }
+  }
+
+  // Local fallback
+  const localKey = 'hagah_verse_submissions';
+  const submissions: VerseSubmission[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+  
+  // Find local verses to map references
+  let localVerses: Verse[] = [];
+  try {
+    const vJson = localStorage.getItem('hagah_verses_list') || '[]';
+    localVerses = JSON.parse(vJson);
+  } catch (err) {}
+  
+  return submissions.map(s => {
+    const v = localVerses.find(ver => ver.id === s.weeklyVerseId);
+    return {
+      ...s,
+      verseReference: s.verseReference || v?.reference || '알 수 없는 성구',
+      verseText: s.verseText || v?.text || ''
+    };
+  }).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+}
+
+export async function updateSubmissionStatus(
+  submissionId: string,
+  status: 'approved' | 'rejected',
+  pastorId?: string
+): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const payload: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+      if (status === 'approved' && pastorId) {
+        payload.is_approved = true;
+        payload.approved_by = toUUID(pastorId);
+      } else if (status === 'rejected') {
+        payload.is_approved = false;
+      }
+      
+      const { data, error } = await supabase
+        .from('submissions')
+        .update(payload)
+        .eq('id', submissionId)
+        .select('user_id, weekly_verse_id');
+        
+      if (error) throw error;
+      
+      if (status === 'approved' && data && data.length > 0) {
+        const sub = data[0];
+        if (sub.user_id && sub.weekly_verse_id) {
+          const progressPayload = {
+            user_id: sub.user_id,
+            verse_id: sub.weekly_verse_id,
+            status: 'completed',
+            streak: 1,
+            best_score: 100,
+            last_tested: new Date().toLocaleDateString('ko-KR'),
+            updated_at: new Date().toISOString()
+          };
+          await supabase.from('progress').upsert(progressPayload, { onConflict: 'user_id,verse_id' });
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('Error updating submission status:', e);
+      return false;
+    }
+  }
+
+  // Fallback to localStorage
+  const localKey = 'hagah_verse_submissions';
+  const submissions: VerseSubmission[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+  const subIndex = submissions.findIndex(s => s.id === submissionId);
+  if (subIndex > -1) {
+    submissions[subIndex].status = status;
+    localStorage.setItem(localKey, JSON.stringify(submissions));
+    
+    if (status === 'approved') {
+      const sub = submissions[subIndex];
+      const localStatusesKey = 'hagah_statuses';
+      const statuses = JSON.parse(localStorage.getItem(localStatusesKey) || '{}');
+      statuses[sub.weeklyVerseId] = {
+        verseId: sub.weeklyVerseId,
+        status: 'completed',
+        streak: 1,
+        bestScore: 100,
+        lastTested: new Date().toLocaleDateString('ko-KR')
+      };
+      localStorage.setItem(localStatusesKey, JSON.stringify(statuses));
+    }
+    return true;
+  }
+  return false;
+}
+
+export async function fetchUserSubmissions(userId: string): Promise<VerseSubmission[]> {
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const uuidUser = toUUID(userId);
+      const { data, error } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('user_id', uuidUser)
+        .order('submitted_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const { data: verses } = await supabase.from('weekly_verses').select('id, reference, text');
+        const verseMap = new Map(verses?.map(v => [v.id, v]) || []);
+        
+        return data.map(d => {
+          const v = verseMap.get(d.weekly_verse_id);
+          return {
+            id: d.id,
+            userId: d.user_id,
+            weeklyVerseId: d.weekly_verse_id,
+            verseReference: v?.reference || '알 수 없는 성구',
+            verseText: v?.text || '',
+            status: d.status as 'pending' | 'approved' | 'rejected',
+            submittedAt: d.submitted_at
+          };
+        });
+      }
+      return [];
+    } catch (e) {
+      console.error('Error fetching user submissions:', e);
+    }
+  }
+
+  // Fallback
+  const localKey = 'hagah_verse_submissions';
+  const submissions: VerseSubmission[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+  const userSubs = submissions.filter(s => s.userId === userId);
+  
+  let localVerses: Verse[] = [];
+  try {
+    const vJson = localStorage.getItem('hagah_verses_list') || '[]';
+    localVerses = JSON.parse(vJson);
+  } catch (err) {}
+  
+  return userSubs.map(s => {
+    const v = localVerses.find(ver => ver.id === s.weeklyVerseId);
+    return {
+      ...s,
+      verseReference: s.verseReference || v?.reference || '알 수 없는 성구',
+      verseText: s.verseText || v?.text || ''
+    };
+  }).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 }

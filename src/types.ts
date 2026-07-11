@@ -116,6 +116,7 @@ export interface AnonymousPrayer {
   status: 'praying' | 'answered';
   isAnonymous?: boolean;
   authorName?: string;
+  userId?: string;
 }
 
 export interface Announcement {

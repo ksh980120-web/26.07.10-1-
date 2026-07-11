@@ -75,10 +75,12 @@ export default function App() {
   const [verses, setVerses] = useState<Verse[]>([]);
   const [verseStatuses, setVerseStatuses] = useState<{ [key: string]: VerseStatus }>({});
   const [attempts, setAttempts] = useState<TestAttempt[]>([]);
-  const [streak, setStreak] = useState<number>(0);
+  const [streak, setStreak] = useState<number>(() => {
+    return Number(sessionStorage.getItem('hagah_streak') || '0');
+  });
   const [selectedQuarter, setSelectedQuarter] = useState<number>(0); // 0 means All, 1-4 for specific quarters
-  const [pinnedVerseId, setPinnedVerseId] = useState<string>('');
-  const [pinnedMonthVerseId, setPinnedMonthVerseId] = useState<string>('');
+  const [pinnedVerseId, setPinnedVerseId] = useState<string>(() => sessionStorage.getItem('hagah_pinned_verse') || '');
+  const [pinnedMonthVerseId, setPinnedMonthVerseId] = useState<string>(() => sessionStorage.getItem('hagah_pinned_month_verse') || '');
   const [gongGwaLessons, setGongGwaLessons] = useState<GongGwa[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showAddAnnForm, setShowAddAnnForm] = useState(false);
@@ -106,12 +108,6 @@ export default function App() {
 
   // Anonymous Prayers state
   const [prayers, setPrayers] = useState<AnonymousPrayer[]>(() => {
-    try {
-      const saved = localStorage.getItem('manna_anonymous_prayers');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
     return [
       {
         id: 'prayer-default-1',
@@ -142,14 +138,6 @@ export default function App() {
       }
     ];
   });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('manna_anonymous_prayers', JSON.stringify(prayers));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [prayers]);
 
   const handleAddPrayer = async (entry: AnonymousPrayer) => {
     setPrayers(prev => [entry, ...prev]);
@@ -553,14 +541,14 @@ export default function App() {
   const handlePinVerse = (id: string) => {
     const newPinId = pinnedVerseId === id ? '' : id;
     setPinnedVerseId(newPinId);
-    localStorage.setItem('hagah_pinned_verse', newPinId);
+    sessionStorage.setItem('hagah_pinned_verse', newPinId);
   };
 
   // Pin a verse as "금월의 암송 성구"
   const handlePinMonthVerse = (id: string) => {
     const newPinId = pinnedMonthVerseId === id ? '' : id;
     setPinnedMonthVerseId(newPinId);
-    localStorage.setItem('hagah_pinned_month_verse', newPinId);
+    sessionStorage.setItem('hagah_pinned_month_verse', newPinId);
   };
 
   // Add verse
@@ -615,7 +603,7 @@ export default function App() {
 
     if (pinnedVerseId === id) {
       setPinnedVerseId('');
-      localStorage.removeItem('hagah_pinned_verse');
+      sessionStorage.removeItem('hagah_pinned_verse');
     }
   };
 
@@ -656,7 +644,7 @@ export default function App() {
   const handleResetToDefaults = async () => {
     saveStatuses({});
     setPinnedVerseId('');
-    localStorage.removeItem('hagah_pinned_verse');
+    sessionStorage.removeItem('hagah_pinned_verse');
   };
 
   // Add Announcement
@@ -871,12 +859,12 @@ export default function App() {
       // Increment daily streak on successful test attempt
       if (score >= 80) {
         const todayStr = new Date().toLocaleDateString();
-        const lastSuccessDate = localStorage.getItem('hagah_last_success_date');
+        const lastSuccessDate = sessionStorage.getItem('hagah_last_success_date');
         if (lastSuccessDate !== todayStr) {
           const newStreak = streak + 1;
           setStreak(newStreak);
-          localStorage.setItem('hagah_streak', String(newStreak));
-          localStorage.setItem('hagah_last_success_date', todayStr);
+          sessionStorage.setItem('hagah_streak', String(newStreak));
+          sessionStorage.setItem('hagah_last_success_date', todayStr);
         }
       }
     }
@@ -931,12 +919,12 @@ export default function App() {
       // Increment streak
       if (score >= 80) {
         const todayStr = new Date().toLocaleDateString();
-        const lastSuccessDate = localStorage.getItem('hagah_last_success_date');
+        const lastSuccessDate = sessionStorage.getItem('hagah_last_success_date');
         if (lastSuccessDate !== todayStr) {
           const newStreak = streak + 1;
           setStreak(newStreak);
-          localStorage.setItem('hagah_streak', String(newStreak));
-          localStorage.setItem('hagah_last_success_date', todayStr);
+          sessionStorage.setItem('hagah_streak', String(newStreak));
+          sessionStorage.setItem('hagah_last_success_date', todayStr);
         }
       }
     }
@@ -1338,6 +1326,7 @@ export default function App() {
                   onStartWriteTest={startWriteTest}
                   onStartSpeakAlong={startSpeakAlong}
                   isGuest={userRole === 'guest'}
+                  currentUserId={currentUserId}
                 />
               ) : activeMainTab === 'gonggwa' ? (
                 <GongGwaPanel

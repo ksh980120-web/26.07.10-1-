@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BookMarked, ShieldCheck, UserPlus, LogIn, Sparkles, X, Heart } from 'lucide-react';
-import { AppUser, AppRole, supabase } from '../lib/supabase';
+import { AppUser, AppRole, supabase, getKoreanErrorMessage } from '../lib/supabase';
 
 interface MainLandingProps {
   onStart: (user: AppUser) => void;
@@ -49,7 +49,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
           console.log("- createClient 생성 여부:", !!supabase);
           console.log("- 실제 Supabase 응답:", { error, data });
 
-          setErrorMsg(error.message);
+          setErrorMsg(getKoreanErrorMessage(error.message));
         } else if (data?.user) {
           const { data: profile } = await supabase
             .from('profiles')
@@ -106,7 +106,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
           console.log("- createClient 생성 여부:", !!supabase);
           console.log("- 실제 Supabase 응답:", { error, data });
 
-          setErrorMsg(error.message);
+          setErrorMsg(getKoreanErrorMessage(error.message));
         } else if (data?.user) {
           const role: AppRole = 'member';
 
@@ -240,44 +240,34 @@ export default function MainLanding({ onStart }: MainLandingProps) {
 
             {isLogin ? (
               <>
-                {/* 체험 계정 안내 배너 */}
-                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-xl p-3 space-y-2.5 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-extrabold text-[#5A5A40] flex items-center gap-1">
-                      💡 회원가입 없이 즉시 체험하기
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail('test');
-                        setPassword('test1234');
-                      }}
-                      className="px-2 py-0.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-[9px] font-bold rounded-md transition cursor-pointer"
-                    >
-                      자동 입력 ⚡
-                    </button>
-                  </div>
-                  <div className="text-[10px] text-stone-600 space-y-1 font-sans leading-relaxed">
-                    <p>
-                      <strong>아이디:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test</code> &nbsp;/&nbsp; 
-                      <strong>비밀번호:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test1234</code>
-                    </p>
-                    <p className="text-[9.5px] text-[#7A7A6A] leading-normal">
-                      ※ 체험 계정(테스트성도)은 말씀 암송 성취도 개별 기록, 나만의 묵상 노트 및 중보기도 올리기 등의 등록·수정 권한이 일부 제한되어 있으니 둘러보신 후 개별 가입을 권장합니다.
+                {/* 회원가입 없이 둘러보기 안내 배너 */}
+                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-2xl p-4.5 space-y-3.5 animate-fadeIn">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black text-[#5A5A40] flex items-center gap-1.5">
+                      ✨ 회원가입 없이 둘러보기
+                    </h4>
+                    <p className="text-[11px] text-stone-600 leading-relaxed font-semibold">
+                      로그인 없이도 말씀 암송, 설교노트 등 주요 기능을 체험해 보실 수 있습니다.
                     </p>
                   </div>
                   
-                  <div className="border-t border-[#8A9A5B]/10 pt-2 flex flex-col gap-1.5">
+                  <div className="pt-2 border-t border-[#8A9A5B]/15 space-y-2.5">
+                    <p className="text-[10.5px] text-[#5A5A40] font-bold leading-relaxed text-center font-serif bg-white/70 py-2.5 px-3 rounded-xl border border-[#8A9A5B]/10" style={{ wordBreak: 'keep-all' }}>
+                      "말씀은 누구에게나 열려 있습니다.<br />
+                      먼저 둘러보시고, 마음에 드신다면 회원가입을 통해 말씀 암송과 신앙의 발자취를 이어가 보세요."
+                    </p>
+
                     <button
                       type="button"
                       onClick={handleStartGuest}
-                      className="w-full py-2 bg-gradient-to-r from-[#8A9A5B] to-[#5A5A40] hover:opacity-95 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-3 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer font-serif tracking-wide"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                      게스트(체험) 모드로 바로 들어가기
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse fill-yellow-300/20" />
+                      게스트 모드로 둘러보기
                     </button>
-                    <p className="text-[9px] text-[#7A7A6A] text-center font-sans">
-                      (게스트 모드로 작성된 내용은 새로고침이나 로그아웃 시 즉시 사라집니다)
+
+                    <p className="text-[10px] text-stone-500 leading-normal font-medium bg-stone-50 p-2.5 rounded-lg border border-stone-200/50" style={{ wordBreak: 'keep-all' }}>
+                      ※ 게스트 모드에서는 작성한 내용이 저장되지 않으며, 새로고침 또는 로그아웃 시 모두 삭제됩니다. 꾸준한 말씀 생활과 신앙 성장 기록을 위해 회원가입 후 이용해 주세요.
                     </p>
                   </div>
                 </div>

@@ -431,7 +431,8 @@ export async function fetchPrayersFromDb(): Promise<AnonymousPrayer[]> {
       amenCount: p.amen_count,
       status: p.status as 'praying' | 'answered',
       isAnonymous: p.is_anonymous,
-      authorName: p.author_name
+      authorName: p.author_name,
+      userId: p.user_id
     }));
   } catch (e) {
     console.error("Error fetching prayers:", e);
@@ -733,3 +734,87 @@ export async function fetchUserSubmissions(userId: string): Promise<VerseSubmiss
     return [];
   }
 }
+
+export function getKoreanErrorMessage(errorMsg: string): string {
+  if (!errorMsg) return '알 수 없는 오류가 발생했습니다.';
+  const msg = errorMsg.toLowerCase();
+  
+  if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+    return '아이디 또는 비밀번호가 올바르지 않습니다.';
+  }
+  if (msg.includes('email not confirmed')) {
+    return '이메일 인증이 완료되지 않았습니다.';
+  }
+  if (msg.includes('email rate limit exceeded') || msg.includes('rate limit exceeded')) {
+    return '잠시 후 다시 시도해주세요.';
+  }
+  if (msg.includes('password should be at least 6 characters') || msg.includes('password should be')) {
+    return '비밀번호는 6자 이상 입력해주세요.';
+  }
+  if (msg.includes('invalid email') || msg.includes('email format')) {
+    return '올바른 이메일 형식이 아닙니다.';
+  }
+  if (msg.includes('user already exists') || msg.includes('already registered')) {
+    return '이미 등록된 회원입니다.';
+  }
+  if (msg.includes('network') || msg.includes('failed to fetch')) {
+    return '네트워크 연결이 불안정합니다. 연결 상태를 확인 후 다시 시도해 주세요.';
+  }
+  
+  return errorMsg;
+}
+
+export async function fetchPersonalPrayers(userId: string): Promise<PrayerEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from('journals')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('category', 'personal_prayer');
+    if (error) throw error;
+    return (data || []).map(j => ({
+      id: j.id,
+      title: j.title,
+      content: j.content,
+      isAnswered: j.prayer === 'answered',
+      dateAdded: j.date,
+      answeredDate: j.passage || undefined
+    }));
+  } catch (e) {
+    console.error("Error fetching personal prayers:", e);
+    return [];
+  }
+}
+
+export async function savePersonalPrayerToDb(userId: string, prayer: PrayerEntry): Promise<boolean> {
+  try {
+    const payload = {
+      id: toUUID(prayer.id),
+      user_id: userId,
+      category: 'personal_prayer',
+      title: prayer.title,
+      content: prayer.content,
+      prayer: prayer.isAnswered ? 'answered' : 'praying',
+      passage: prayer.answeredDate || null,
+      date: prayer.dateAdded
+    };
+    const { error } = await supabase.from('journals').upsert(payload);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("Error saving personal prayer:", e);
+    return false;
+  }
+}
+
+export async function deletePersonalPrayerFromDb(prayerId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('journals').delete().eq('id', toUUID(prayerId));
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("Error deleting personal prayer:", e);
+    return false;
+  }
+}
+

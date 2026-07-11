@@ -9,7 +9,6 @@ interface AnonymousPrayerPanelProps {
   onUpdatePrayer?: (id: string, updatedFields: Partial<AnonymousPrayer>) => void;
   onTogglePrayerStatus?: (id: string) => void;
   isDemoUser?: boolean;
-  currentUserId?: string;
 }
 
 const CATEGORY_MAP = {
@@ -27,7 +26,6 @@ export default function AnonymousPrayerPanel({
   onUpdatePrayer,
   onTogglePrayerStatus,
   isDemoUser = false,
-  currentUserId,
 }: AnonymousPrayerPanelProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,10 +49,24 @@ export default function AnonymousPrayerPanel({
   const [editCategory, setEditCategory] = useState<'family' | 'health' | 'faith' | 'career' | 'others'>('faith');
 
   // Store already clicked prayer IDs in local state to prevent spamming Amen on same session
-  const [votedPrayers, setVotedPrayers] = useState<string[]>([]);
+  const [votedPrayers, setVotedPrayers] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('manna_voted_prayers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Track owned prayers (so users can edit/complete their own prayers)
-  const [myPrayerIds, setMyPrayerIds] = useState<string[]>([]);
+  const [myPrayerIds, setMyPrayerIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('manna_my_prayers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const handleAmenClick = (id: string) => {
     const hasAlreadyVoted = votedPrayers.includes(id);
@@ -62,10 +74,12 @@ export default function AnonymousPrayerPanel({
       onIncrementAmen(id, false);
       const nextVotes = votedPrayers.filter(vId => vId !== id);
       setVotedPrayers(nextVotes);
+      localStorage.setItem('manna_voted_prayers', JSON.stringify(nextVotes));
     } else {
       onIncrementAmen(id, true);
       const nextVotes = [...votedPrayers, id];
       setVotedPrayers(nextVotes);
+      localStorage.setItem('manna_voted_prayers', JSON.stringify(nextVotes));
     }
   };
 
@@ -93,9 +107,10 @@ export default function AnonymousPrayerPanel({
 
     onAddPrayer(newPrayerEntry);
 
-    // Save ownership locally (in memory fallback)
+    // Save ownership locally
     const nextMyPrayers = [...myPrayerIds, generatedId];
     setMyPrayerIds(nextMyPrayers);
+    localStorage.setItem('manna_my_prayers', JSON.stringify(nextMyPrayers));
 
     setNewTitle('');
     setNewContent('');
@@ -432,7 +447,9 @@ export default function AnonymousPrayerPanel({
         {filteredPrayers.length === 0 ? (
           <div className="col-span-full py-16 bg-white border border-[#E9E3D8] rounded-3xl text-center space-y-2">
             <MessageSquare className="w-8 h-8 text-[#A0A090] mx-auto opacity-40 animate-pulse" />
-            <p className="text-xs font-bold text-[#7A7A6A]">등록된 내용이 없습니다.</p>
+            <p className="text-xs font-bold text-[#7A7A6A]">
+              {prayerSubTab === 'praying' ? '아직 이 분야의 기도 요청 제목이 없습니다.' : '아직 응답된 감사의 기적이 등록되지 않았습니다.'}
+            </p>
             <p className="text-[11px] text-[#A0A090]">
               {prayerSubTab === 'praying' ? '성도님의 마음의 소원을 첫 번째 기도로 남겨 보십시오.' : '기도 응답을 받아 하나님의 영광을 함께 높여 보세요.'}
             </p>
@@ -441,7 +458,7 @@ export default function AnonymousPrayerPanel({
           filteredPrayers.map((prayer) => {
             const catInfo = CATEGORY_MAP[prayer.category] || CATEGORY_MAP.others;
             const hasVoted = votedPrayers.includes(prayer.id);
-            const isOwner = !isDemoUser && (myPrayerIds.includes(prayer.id) || !!(prayer.userId && prayer.userId === currentUserId));
+            const isOwner = !isDemoUser && myPrayerIds.includes(prayer.id);
             const isEditing = editingId === prayer.id;
 
             return (

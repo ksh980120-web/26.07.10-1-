@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, TrendingUp, ArrowUpDown, Search, Award, Plus, Trash2, FileSpreadsheet, Check, RefreshCw, Lock, Inbox, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { SaintProgress, VerseSubmission } from '../types';
-import { fetchSaintsProgressFromDb, saveSaintProgressToDb, deleteSaintFromDb, fetchSubmissions, updateSubmissionStatus, supabase } from '../lib/supabase';
+import { fetchSaintsProgressFromDb, saveSaintProgressToDb, deleteSaintFromDb, isSupabaseConfigured, fetchSubmissions, updateSubmissionStatus, supabase } from '../lib/supabase';
 
 interface PastorAdminPanelProps {
   totalVersesCount: number;
@@ -40,7 +40,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
     }
   };
 
-  // Load saints progress from Supabase based on configuration
+  // Load saints progress from Supabase / localStorage based on configuration
   const loadSaints = async () => {
     if (currentUserRole === 'admin') return;
     setIsLoading(true);
@@ -59,7 +59,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
     loadSubmissionsList();
 
     // Setup Realtime listener for submissions table
-    if (supabase) {
+    if (isSupabaseConfigured && supabase) {
       const channel = supabase
         .channel('realtime-submissions-pastor')
         .on(
@@ -124,6 +124,10 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
 
     // Save to DB / Storage
     await saveSaintProgressToDb(newSaint);
+    // Sync back
+    const local = localStorage.getItem('manna_saints');
+    const localSaints = local ? JSON.parse(local) : [];
+    localStorage.setItem('manna_saints', JSON.stringify([newSaint, ...localSaints]));
   };
 
   // Delete saint
@@ -132,6 +136,11 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
     triggerSaveAlert();
 
     await deleteSaintFromDb(id);
+    const local = localStorage.getItem('manna_saints');
+    if (local) {
+      const updated = JSON.parse(local).filter((s: any) => s.id !== id);
+      localStorage.setItem('manna_saints', JSON.stringify(updated));
+    }
   };
 
   // Adjust completed count (Manual Input for Text/SMS)
@@ -160,6 +169,9 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
 
     setSaints(updatedSaints);
     triggerSaveAlert();
+
+    // Save to local storage sync
+    localStorage.setItem('manna_saints', JSON.stringify(updatedSaints));
   };
 
   const triggerSaveAlert = () => {
@@ -359,7 +371,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
               return (
                 <div className="py-12 text-center border border-[#E9E3D8] rounded-2xl bg-stone-50/50">
                   <Inbox className="w-8 h-8 text-stone-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-stone-500">등록된 내용이 없습니다.</p>
+                  <p className="text-xs font-bold text-stone-500">해당하는 제출 내역이 없습니다.</p>
                 </div>
               );
             }
@@ -436,7 +448,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
             <ul className="text-[11px] text-[#7A7A6A] leading-relaxed space-y-1.5 pl-1">
               <li className="flex items-start gap-1">
                 <span className="text-[#8A9A5B] font-bold">1.</span>
-                <span><strong>실시간 클라우드 저장:</strong> 등록한 성도 정보는 Supabase 데이터베이스에 안전하게 실시간 저장되므로 안심하셔도 됩니다.</span>
+                <span><strong>자동 로컬 저장:</strong> 등록한 성도 정보는 사용하시는 브라우저 데이터(localStorage)에 안전하게 실시간 저장되므로 안심하셔도 됩니다.</span>
               </li>
               <li className="flex items-start gap-1">
                 <span className="text-[#8A9A5B] font-bold">2.</span>
@@ -514,7 +526,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
                     <td colSpan={5} className="py-12 text-center text-[#A0A090] leading-relaxed">
                       {searchQuery ? '검색된 성도님이 없습니다.' : (
                         <div className="space-y-1">
-                          <p className="font-bold text-[#7A7A6A]">등록된 내용이 없습니다.</p>
+                          <p className="font-bold text-[#7A7A6A]">등록된 성도가 없습니다.</p>
                           <p className="text-[11px]">위 입력창에 성도명을 기입하고 "성도 등록" 버튼을 눌러 양육을 시작해 보세요!</p>
                         </div>
                       )}

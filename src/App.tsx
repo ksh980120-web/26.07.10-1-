@@ -55,6 +55,7 @@ import {
   savePrayerToDb,
   deletePrayerFromDb,
   updateSaintCompletedCountInDb,
+  isSupabaseConfigured,
   AppUser,
   fetchLessonsFromDb,
   saveLessonToDb,
@@ -63,11 +64,11 @@ import {
   saveAnnouncementToDb,
   deleteAnnouncementFromDb,
   onAuthStateChange,
+  appSignOut,
   submitVerseToPastor,
   fetchSubmissions,
   updateSubmissionStatus,
-  fetchUserSubmissions,
-  supabase
+  fetchUserSubmissions
 } from './lib/supabase';
 
 export default function App() {
@@ -75,12 +76,10 @@ export default function App() {
   const [verses, setVerses] = useState<Verse[]>([]);
   const [verseStatuses, setVerseStatuses] = useState<{ [key: string]: VerseStatus }>({});
   const [attempts, setAttempts] = useState<TestAttempt[]>([]);
-  const [streak, setStreak] = useState<number>(() => {
-    return Number(sessionStorage.getItem('hagah_streak') || '0');
-  });
+  const [streak, setStreak] = useState<number>(0);
   const [selectedQuarter, setSelectedQuarter] = useState<number>(0); // 0 means All, 1-4 for specific quarters
-  const [pinnedVerseId, setPinnedVerseId] = useState<string>(() => sessionStorage.getItem('hagah_pinned_verse') || '');
-  const [pinnedMonthVerseId, setPinnedMonthVerseId] = useState<string>(() => sessionStorage.getItem('hagah_pinned_month_verse') || '');
+  const [pinnedVerseId, setPinnedVerseId] = useState<string>('');
+  const [pinnedMonthVerseId, setPinnedMonthVerseId] = useState<string>('');
   const [gongGwaLessons, setGongGwaLessons] = useState<GongGwa[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showAddAnnForm, setShowAddAnnForm] = useState(false);
@@ -108,6 +107,12 @@ export default function App() {
 
   // Anonymous Prayers state
   const [prayers, setPrayers] = useState<AnonymousPrayer[]>(() => {
+    try {
+      const saved = localStorage.getItem('manna_anonymous_prayers');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
     return [
       {
         id: 'prayer-default-1',
@@ -138,6 +143,14 @@ export default function App() {
       }
     ];
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('manna_anonymous_prayers', JSON.stringify(prayers));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [prayers]);
 
   const handleAddPrayer = async (entry: AnonymousPrayer) => {
     setPrayers(prev => [entry, ...prev]);
@@ -541,14 +554,14 @@ export default function App() {
   const handlePinVerse = (id: string) => {
     const newPinId = pinnedVerseId === id ? '' : id;
     setPinnedVerseId(newPinId);
-    sessionStorage.setItem('hagah_pinned_verse', newPinId);
+    localStorage.setItem('hagah_pinned_verse', newPinId);
   };
 
   // Pin a verse as "금월의 암송 성구"
   const handlePinMonthVerse = (id: string) => {
     const newPinId = pinnedMonthVerseId === id ? '' : id;
     setPinnedMonthVerseId(newPinId);
-    sessionStorage.setItem('hagah_pinned_month_verse', newPinId);
+    localStorage.setItem('hagah_pinned_month_verse', newPinId);
   };
 
   // Add verse
@@ -590,11 +603,10 @@ export default function App() {
 
   // Delete verse
   const handleDeleteVerse = async (id: string) => {
-    const isPersonal = verses.find(v => v.id === id)?.isPersonal;
     const updated = verses.filter(v => v.id !== id);
     saveVerses(updated);
 
-    if (isAdminAuthenticated || (isPersonal && userRole !== 'guest')) {
+    if (isAdminAuthenticated) {
       await deleteVerseFromDb(id);
     }
 
@@ -604,7 +616,7 @@ export default function App() {
 
     if (pinnedVerseId === id) {
       setPinnedVerseId('');
-      sessionStorage.removeItem('hagah_pinned_verse');
+      localStorage.removeItem('hagah_pinned_verse');
     }
   };
 
@@ -645,7 +657,7 @@ export default function App() {
   const handleResetToDefaults = async () => {
     saveStatuses({});
     setPinnedVerseId('');
-    sessionStorage.removeItem('hagah_pinned_verse');
+    localStorage.removeItem('hagah_pinned_verse');
   };
 
   // Add Announcement
@@ -728,7 +740,7 @@ export default function App() {
     setShowManager(false);
   };
 
-  const handleAddPersonalVerse = async (newVerseData: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => {
+  const handleAddPersonalVerse = (newVerseData: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => {
     const newVerse: Verse = {
       ...newVerseData,
       id: `verse-personal-${Date.now()}`,
@@ -738,10 +750,6 @@ export default function App() {
     };
     const updated = [...verses, newVerse];
     saveVerses(updated);
-
-    if (userRole !== 'guest' && currentUserId) {
-      await saveVerseToDb(newVerse);
-    }
 
     // Initialize status
     const updatedStatuses = {
@@ -864,12 +872,12 @@ export default function App() {
       // Increment daily streak on successful test attempt
       if (score >= 80) {
         const todayStr = new Date().toLocaleDateString();
-        const lastSuccessDate = sessionStorage.getItem('hagah_last_success_date');
+        const lastSuccessDate = localStorage.getItem('hagah_last_success_date');
         if (lastSuccessDate !== todayStr) {
           const newStreak = streak + 1;
           setStreak(newStreak);
-          sessionStorage.setItem('hagah_streak', String(newStreak));
-          sessionStorage.setItem('hagah_last_success_date', todayStr);
+          localStorage.setItem('hagah_streak', String(newStreak));
+          localStorage.setItem('hagah_last_success_date', todayStr);
         }
       }
     }
@@ -924,12 +932,12 @@ export default function App() {
       // Increment streak
       if (score >= 80) {
         const todayStr = new Date().toLocaleDateString();
-        const lastSuccessDate = sessionStorage.getItem('hagah_last_success_date');
+        const lastSuccessDate = localStorage.getItem('hagah_last_success_date');
         if (lastSuccessDate !== todayStr) {
           const newStreak = streak + 1;
           setStreak(newStreak);
-          sessionStorage.setItem('hagah_streak', String(newStreak));
-          sessionStorage.setItem('hagah_last_success_date', todayStr);
+          localStorage.setItem('hagah_streak', String(newStreak));
+          localStorage.setItem('hagah_last_success_date', todayStr);
         }
       }
     }
@@ -1090,7 +1098,7 @@ export default function App() {
             {/* MAIN LOGOUT BUTTON */}
             <button
               onClick={async () => {
-                await supabase.auth.signOut();
+                await appSignOut();
                 setIsAuthenticated(false);
                 setUserRole(null);
                 setIsAdminAuthenticated(false);
@@ -1109,6 +1117,14 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {!isSupabaseConfigured && (
+        <div className="bg-rose-50 border-b border-rose-200 py-3 px-4 text-center text-rose-800 text-xs font-bold font-sans flex items-center justify-center gap-2" id="supabase-disconnect-banner">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+          현재 서버에 연결할 수 없습니다.
+        </div>
+      )}
+
       {/* MAIN LAYOUT WRAPPER */}
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8" id="main-content-layout">
         
@@ -1331,7 +1347,6 @@ export default function App() {
                   onStartWriteTest={startWriteTest}
                   onStartSpeakAlong={startSpeakAlong}
                   isGuest={userRole === 'guest'}
-                  currentUserId={currentUserId}
                 />
               ) : activeMainTab === 'gonggwa' ? (
                 <GongGwaPanel

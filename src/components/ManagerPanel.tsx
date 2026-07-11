@@ -909,8 +909,8 @@ export default function ManagerPanel({
                 /* GongGwa List Area */
                 <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
                   {gongGwaLessons.length === 0 ? (
-                    <div className="p-8 text-center text-[#A0A090] text-xs font-medium">
-                      등록된 내용이 없습니다.
+                    <div className="p-8 text-center text-[#A0A090] italic text-xs">
+                      등록된 공과가 없습니다. [새 공과 추가] 버튼을 눌러 등록해 보세요.
                     </div>
                   ) : (
                     gongGwaLessons.map((g) => (
@@ -975,7 +975,7 @@ export default function ManagerPanel({
               <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
                 {prayers.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-stone-200 rounded-xl">
-                    <p className="text-xs text-stone-400 font-bold">등록된 내용이 없습니다.</p>
+                    <p className="text-xs text-stone-400 font-bold">현재 등록된 중보기도 제목이 없습니다.</p>
                   </div>
                 ) : (
                   prayers.map((prayer) => {
@@ -1157,8 +1157,8 @@ export default function ManagerPanel({
               <tbody className="divide-y divide-[#F0ECE4] text-[#4A4A4A] font-serif">
                 {verses.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-[#A0A090] font-sans">
-                      등록된 내용이 없습니다.
+                    <td colSpan={5} className="p-8 text-center text-[#A0A090] font-sans italic">
+                      등록된 암송 말씀이 없습니다. 위의 양식을 사용해 말씀을 추가해 보세요.
                     </td>
                   </tr>
                 ) : (

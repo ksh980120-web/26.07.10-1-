@@ -80,7 +80,7 @@ export default function GongGwaPanel({
     return (
       <div className="min-h-[300px] flex flex-col items-center justify-center space-y-4 bg-white border border-[#E9E3D8] rounded-[32px] p-8 shadow-sm text-center">
         <BookOpen className="w-8 h-8 text-[#A0A090]" />
-        <p className="text-sm font-medium text-[#7A7A6A] font-serif">등록된 내용이 없습니다.</p>
+        <p className="text-sm font-medium text-[#7A7A6A] font-serif">등록된 공과 내용이 없습니다.</p>
       </div>
     );
   }

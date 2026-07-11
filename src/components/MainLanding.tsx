@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BookMarked, ShieldCheck, UserPlus, LogIn, Sparkles, X, Heart } from 'lucide-react';
-import { AppUser, AppRole, supabase, getKoreanErrorMessage } from '../lib/supabase';
+import { appSignIn, appSignUp, isSupabaseConfigured, AppUser, supabase } from '../lib/supabase';
 
 interface MainLandingProps {
   onStart: (user: AppUser) => void;
@@ -12,11 +12,11 @@ export default function MainLanding({ onStart }: MainLandingProps) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState(() => {
+    return !isSupabaseConfigured ? '현재 서버에 연결할 수 없습니다.' : '';
+  });
   const [showFindModal, setShowFindModal] = useState(false);
   const [findResult, setFindResult] = useState('');
-  const [foundEmail, setFoundEmail] = useState('');
-  const [resetSent, setResetSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleStartGuest = () => {
@@ -36,47 +36,11 @@ export default function MainLanding({ onStart }: MainLandingProps) {
     try {
       if (isLogin) {
         // Sign In
-        const trimmedEmail = email.trim();
-        const loginEmail = trimmedEmail === 'test' ? 'test@church.com' : trimmedEmail;
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: loginEmail,
-          password
-        });
-
+        const { user, error } = await appSignIn(email, password);
         if (error) {
-          console.log("- Supabase URL:", (import.meta as any).env.VITE_SUPABASE_URL);
-          console.log("- URL 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_URL);
-          console.log("- KEY 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_ANON_KEY);
-          console.log("- createClient 생성 여부:", !!supabase);
-          console.log("- 실제 Supabase 응답:", { error, data });
-
-          setErrorMsg(getKoreanErrorMessage(error.message));
-        } else if (data?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          let resolvedRole: AppRole = 'member';
-          if (profile && profile.role) {
-            resolvedRole = profile.role as AppRole;
-          }
-
-          if (loginEmail === 'test@church.com' || resolvedRole === 'guest') {
-            resolvedRole = 'guest';
-          }
-
-          const appUser: AppUser = {
-            id: data.user.id,
-            email: data.user.email || loginEmail,
-            name: profile?.name || data.user.user_metadata?.name || '성도',
-            role: resolvedRole,
-            phone: profile?.phone || data.user.user_metadata?.phone || ''
-          };
-
-          onStart(appUser);
+          setErrorMsg(error);
+        } else if (user) {
+          onStart(user);
         }
       } else {
         // Sign Up
@@ -91,52 +55,15 @@ export default function MainLanding({ onStart }: MainLandingProps) {
           return;
         }
 
-        const trimmedEmail = email.trim();
-
-        const { data, error } = await supabase.auth.signUp({
-          email: trimmedEmail,
-          password,
-          options: {
-            data: { name: name.trim(), phone: phone.trim() }
-          }
-        });
-
+        const { user, error } = await appSignUp(name.trim(), phone.trim(), email.trim(), password);
         if (error) {
-          console.log("- Supabase URL:", (import.meta as any).env.VITE_SUPABASE_URL);
-          console.log("- URL 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_URL);
-          console.log("- KEY 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_ANON_KEY);
-          console.log("- createClient 생성 여부:", !!supabase);
-          console.log("- 실제 Supabase 응답:", { error, data });
-
-          setErrorMsg(getKoreanErrorMessage(error.message));
-        } else if (data?.user) {
-          const role: AppRole = 'member';
-
-          try {
-            await supabase.from('profiles').upsert({
-              id: data.user.id,
-              email: trimmedEmail,
-              name: name.trim(),
-              phone: phone.trim(),
-              role,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          } catch (profileErr) {
-            console.error("Profile upsert during sign up failed:", profileErr);
-          }
-
-          onStart({
-            id: data.user.id,
-            email: trimmedEmail,
-            name: name.trim(),
-            role,
-            phone: phone.trim()
-          });
+          setErrorMsg(error);
+        } else if (user) {
+          onStart(user);
         }
       }
     } catch (err: any) {
-      setErrorMsg(getKoreanErrorMessage(err.message || '요청 처리 중 문제가 발생했습니다.'));
+      setErrorMsg(err.message || '요청 처리 중 문제가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -242,34 +169,44 @@ export default function MainLanding({ onStart }: MainLandingProps) {
 
             {isLogin ? (
               <>
-                {/* 회원가입 없이 둘러보기 안내 배너 */}
-                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-2xl p-4.5 space-y-3.5 animate-fadeIn">
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black text-[#5A5A40] flex items-center gap-1.5">
-                      ✨ 회원가입 없이 둘러보기
-                    </h4>
-                    <p className="text-[11px] text-stone-600 leading-relaxed font-semibold">
-                      로그인 없이도 말씀 암송, 설교노트 등 주요 기능을 체험해 보실 수 있습니다.
+                {/* 체험 계정 안내 배너 */}
+                <div className="bg-[#8A9A5B]/10 border border-[#8A9A5B]/20 rounded-xl p-3 space-y-2.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold text-[#5A5A40] flex items-center gap-1">
+                      💡 회원가입 없이 즉시 체험하기
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail('test');
+                        setPassword('test1234');
+                      }}
+                      className="px-2 py-0.5 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-[9px] font-bold rounded-md transition cursor-pointer"
+                    >
+                      자동 입력 ⚡
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-stone-600 space-y-1 font-sans leading-relaxed">
+                    <p>
+                      <strong>아이디:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test</code> &nbsp;/&nbsp; 
+                      <strong>비밀번호:</strong> <code className="bg-white px-1.5 py-0.2 rounded border border-stone-200 font-mono">test1234</code>
+                    </p>
+                    <p className="text-[9.5px] text-[#7A7A6A] leading-normal">
+                      ※ 체험 계정(테스트성도)은 말씀 암송 성취도 개별 기록, 나만의 묵상 노트 및 중보기도 올리기 등의 등록·수정 권한이 일부 제한되어 있으니 둘러보신 후 개별 가입을 권장합니다.
                     </p>
                   </div>
                   
-                  <div className="pt-2 border-t border-[#8A9A5B]/15 space-y-2.5">
-                    <p className="text-[10.5px] text-[#5A5A40] font-bold leading-relaxed text-center font-serif bg-white/70 py-2.5 px-3 rounded-xl border border-[#8A9A5B]/10" style={{ wordBreak: 'keep-all' }}>
-                      "말씀은 누구에게나 열려 있습니다.<br />
-                      먼저 둘러보시고, 마음에 드신다면 회원가입을 통해 말씀 암송과 신앙의 발자취를 이어가 보세요."
-                    </p>
-
+                  <div className="border-t border-[#8A9A5B]/10 pt-2 flex flex-col gap-1.5">
                     <button
                       type="button"
                       onClick={handleStartGuest}
-                      className="w-full py-3 bg-[#8A9A5B] hover:bg-[#78884F] text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer font-serif tracking-wide"
+                      className="w-full py-2 bg-gradient-to-r from-[#8A9A5B] to-[#5A5A40] hover:opacity-95 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse fill-yellow-300/20" />
-                      게스트 모드로 둘러보기
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                      게스트(체험) 모드로 바로 들어가기
                     </button>
-
-                    <p className="text-[10px] text-stone-500 leading-normal font-medium bg-stone-50 p-2.5 rounded-lg border border-stone-200/50" style={{ wordBreak: 'keep-all' }}>
-                      ※ 게스트 모드에서는 작성한 내용이 저장되지 않으며, 새로고침 또는 로그아웃 시 모두 삭제됩니다. 꾸준한 말씀 생활과 신앙 성장 기록을 위해 회원가입 후 이용해 주세요.
+                    <p className="text-[9px] text-[#7A7A6A] text-center font-sans">
+                      (게스트 모드로 작성된 내용은 새로고침이나 로그아웃 시 즉시 사라집니다)
                     </p>
                   </div>
                 </div>
@@ -387,8 +324,6 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                 onClick={() => {
                   setShowFindModal(false);
                   setFindResult('');
-                  setFoundEmail('');
-                  setResetSent(false);
                 }}
                 className="text-[#A0A090] hover:text-stone-700 transition"
               >
@@ -408,7 +343,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                 const nameVal = (form.elements[0] as HTMLInputElement).value.trim();
                 const phoneVal = (form.elements[1] as HTMLInputElement).value.trim();
                 
-                if (!supabase) {
+                if (!isSupabaseConfigured || !supabase) {
                   setFindResult("현재 서버에 연결할 수 없어 계정을 조회할 수 없습니다.");
                   return;
                 }
@@ -433,10 +368,8 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                   );
 
                   if (found) {
-                    setFoundEmail(found.email);
-                    setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n\n아래의 [비밀번호 재설정 이메일 받기] 버튼을 누르시면 해당 이메일로 비밀번호 재설정 링크를 발송해 드립니다.`);
+                    setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n\n※ 개인정보 보호 및 보안을 위해 비밀번호는 직접 제공되지 않습니다. 분실 시 목양실이나 말씀 암송 담당자분께 연락하여 비밀번호 재설정/초기화를 요청해 주세요.`);
                   } else {
-                    setFoundEmail('');
                     setFindResult(`등록된 성도 정보 없음 ❌\n\n입력하신 성함(${nameVal})과 연락처(${phoneVal})로 일치하는 가입 정보를 찾지 못했습니다.\n\n정확한 본명과 전화번호를 기입해 보시거나 새로 가입해 주세요.`);
                   }
                 } catch (err: any) {
@@ -476,30 +409,6 @@ export default function MainLanding({ onStart }: MainLandingProps) {
               <div className="p-3 bg-[#FDF6E2] border border-amber-200 rounded-lg text-[11px] text-amber-800 leading-relaxed whitespace-pre-line font-sans font-medium">
                 {findResult}
               </div>
-            )}
-
-            {foundEmail && !resetSent && (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const { error } = await supabase.auth.resetPasswordForEmail(foundEmail, {
-                      redirectTo: window.location.origin
-                    });
-                    if (error) {
-                      setFindResult(prev => prev + `\n\n비밀번호 재설정 메일 발송 실패: ${getKoreanErrorMessage(error.message)}`);
-                    } else {
-                      setResetSent(true);
-                      setFindResult(`비밀번호 재설정 링크 발송 성공! ✉️\n\n${foundEmail} 메일 수신함을 확인해 주세요. 메일에 담긴 링크를 클릭하여 비밀번호를 재설정하실 수 있습니다.`);
-                    }
-                  } catch (e: any) {
-                    setFindResult(prev => prev + `\n\n오류가 발생했습니다: ${getKoreanErrorMessage(e.message || '알 수 없는 오류')}`);
-                  }
-                }}
-                className="w-full py-2 bg-[#5A5A40] hover:bg-[#4A4A30] text-white text-xs font-bold rounded-lg transition text-center cursor-pointer"
-              >
-                비밀번호 재설정 이메일 받기
-              </button>
             )}
           </div>
         </div>

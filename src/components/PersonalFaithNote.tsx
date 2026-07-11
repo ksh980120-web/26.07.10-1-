@@ -27,18 +27,9 @@ import {
 } from 'lucide-react';
 
 import { Verse, VerseStatus, MemorizeStatus, FaithJournalEntry, PrayerEntry } from '../types';
-import {
-  fetchFaithJournals,
-  saveFaithJournalToDb,
-  deleteFaithJournalFromDb,
-  fetchPersonalPrayers,
-  savePersonalPrayerToDb,
-  deletePersonalPrayerFromDb
-} from '../lib/supabase';
 
 interface PersonalFaithNoteProps {
   isGuest?: boolean;
-  currentUserId?: string | null;
   verses: Verse[];
   verseStatuses: { [key: string]: VerseStatus };
   onAddPersonalVerse: (verse: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => void;
@@ -53,7 +44,6 @@ type TabType = 'journal' | 'verse' | 'prayer';
 
 export default function PersonalFaithNote({
   isGuest = false,
-  currentUserId = null,
   verses,
   verseStatuses,
   onAddPersonalVerse,
@@ -97,8 +87,6 @@ export default function PersonalFaithNote({
   // Expanded cards tracker for journal feed
   const [expandedJournals, setExpandedJournals] = useState<{ [key: string]: boolean }>({});
 
-  const [isDbLoading, setIsDbLoading] = useState(false);
-
   // --- LOAD INITIAL DATA ---
   useEffect(() => {
     if (isGuest) {
@@ -110,7 +98,7 @@ export default function PersonalFaithNote({
         title: '[체험] 은혜로운 말씀 묵상 기록하기 (저장 불가)',
         passage: '시편 1:2',
         content: '여기에 말씀 묵상이나 예배 설교 노트를 자유롭게 작성해 보실 수 있습니다.\n\n※ 게스트 모드에서는 페이지를 새로고침하거나 로그아웃 시 작성한 모든 신앙 성장 기록이 사라집니다. 나만의 전용 신앙 노트를 안전하게 보관하시려면, 우측 상단에서 로그아웃 하신 후 정식 회원으로 가입하여 이용해 보시기 바랍니다!',
-        prayer: '주여, 주의 율법을 주야로 즐겁게 읊조리며 그 교훈 l 마음에 꼭 새겨 순종하는 복된 삶이 되게 인도하옵소서.'
+        prayer: '주여, 주의 율법을 주야로 즐겁게 읊조리며 그 교훈을 마음에 꼭 새겨 순종하는 복된 삶이 되게 인도하옵소서.'
       };
       setJournals([welcomeJournal]);
 
@@ -125,28 +113,31 @@ export default function PersonalFaithNote({
       return;
     }
 
-    if (!currentUserId) return;
-
-    async function loadDbData() {
-      setIsDbLoading(true);
+    // Load journals
+    const savedJournals = localStorage.getItem('hagah_journals');
+    if (savedJournals) {
       try {
-        const [dbJournals, dbPrayers] = await Promise.all([
-          fetchFaithJournals(currentUserId!),
-          fetchPersonalPrayers(currentUserId!)
-        ]);
-        setJournals(dbJournals);
-        setPrayers(dbPrayers);
-      } catch (err) {
-        console.error("Error loading journals or prayers from database:", err);
-      } finally {
-        setIsDbLoading(false);
-      }
+        setJournals(JSON.parse(savedJournals));
+      } catch (e) {}
     }
 
-    loadDbData();
-  }, [isGuest, currentUserId]);
+    // Load prayers
+    const savedPrayers = localStorage.getItem('hagah_prayers');
+    if (savedPrayers) {
+      try {
+        setPrayers(JSON.parse(savedPrayers));
+      } catch (e) {}
+    }
+  }, [isGuest]);
 
   // --- JOURNAL CRUD ---
+  const saveJournalsToStorage = (updated: FaithJournalEntry[]) => {
+    setJournals(updated);
+    if (!isGuest) {
+      localStorage.setItem('hagah_journals', JSON.stringify(updated));
+    }
+  };
+
   const handleOpenNewJournal = () => {
     setEditingJournalId(null);
     const today = new Date();
@@ -173,63 +164,46 @@ export default function PersonalFaithNote({
     setShowJournalForm(true);
   };
 
-  const handleJournalSubmit = async (e: React.FormEvent) => {
+  const handleJournalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!jTitle.trim() || !jContent.trim()) return;
 
-    const today = new Date();
-    const dateStr = jDate || `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-
     if (editingJournalId) {
-      const updatedEntry: FaithJournalEntry = {
-        id: editingJournalId,
-        date: dateStr,
-        category: jCategory,
-        title: jTitle.trim(),
-        passage: jPassage.trim() || undefined,
-        content: jContent.trim(),
-        prayer: jPrayer.trim() || undefined
-      };
-
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await saveFaithJournalToDb(currentUserId, updatedEntry);
-        setIsDbLoading(false);
-      }
-
-      setJournals(prev => prev.map(item => item.id === editingJournalId ? updatedEntry : item));
+      const updated = journals.map(item =>
+        item.id === editingJournalId
+          ? {
+              ...item,
+              date: jDate,
+              category: jCategory,
+              title: jTitle.trim(),
+              passage: jPassage.trim() || undefined,
+              content: jContent.trim(),
+              prayer: jPrayer.trim() || undefined
+            }
+          : item
+      );
+      saveJournalsToStorage(updated);
     } else {
       const newEntry: FaithJournalEntry = {
         id: `journal-${Date.now()}`,
-        date: dateStr,
+        date: jDate,
         category: jCategory,
         title: jTitle.trim(),
         passage: jPassage.trim() || undefined,
         content: jContent.trim(),
         prayer: jPrayer.trim() || undefined
       };
-
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await saveFaithJournalToDb(currentUserId, newEntry);
-        setIsDbLoading(false);
-      }
-
-      setJournals(prev => [newEntry, ...prev]);
+      saveJournalsToStorage([newEntry, ...journals]);
     }
 
     setShowJournalForm(false);
     setEditingJournalId(null);
   };
 
-  const handleDeleteJournal = async (id: string) => {
+  const handleDeleteJournal = (id: string) => {
     if (window.confirm('정말 이 노트를 삭제하시겠습니까?')) {
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await deleteFaithJournalFromDb(id);
-        setIsDbLoading(false);
-      }
-      setJournals(prev => prev.filter(item => item.id !== id));
+      const updated = journals.filter(item => item.id !== id);
+      saveJournalsToStorage(updated);
     }
   };
 
@@ -238,6 +212,11 @@ export default function PersonalFaithNote({
   };
 
   // --- PRAYER CRUD ---
+  const savePrayersToStorage = (updated: PrayerEntry[]) => {
+    setPrayers(updated);
+    localStorage.setItem('hagah_prayers', JSON.stringify(updated));
+  };
+
   const handleOpenNewPrayer = () => {
     setEditingPrayerId(null);
     setPTitle('');
@@ -252,28 +231,21 @@ export default function PersonalFaithNote({
     setShowPrayerForm(true);
   };
 
-  const handlePrayerSubmit = async (e: React.FormEvent) => {
+  const handlePrayerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pTitle.trim() || !pContent.trim()) return;
 
     if (editingPrayerId) {
-      const existing = prayers.find(item => item.id === editingPrayerId);
-      const updatedEntry: PrayerEntry = {
-        id: editingPrayerId,
-        title: pTitle.trim(),
-        content: pContent.trim(),
-        isAnswered: existing ? existing.isAnswered : false,
-        dateAdded: existing ? existing.dateAdded : new Date().toLocaleDateString('ko-KR').slice(0, -1),
-        answeredDate: existing ? existing.answeredDate : undefined
-      };
-
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await savePersonalPrayerToDb(currentUserId, updatedEntry);
-        setIsDbLoading(false);
-      }
-
-      setPrayers(prev => prev.map(item => item.id === editingPrayerId ? updatedEntry : item));
+      const updated = prayers.map(item =>
+        item.id === editingPrayerId
+          ? {
+              ...item,
+              title: pTitle.trim(),
+              content: pContent.trim()
+            }
+          : item
+      );
+      savePrayersToStorage(updated);
     } else {
       const today = new Date();
       const dateStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
@@ -284,56 +256,35 @@ export default function PersonalFaithNote({
         isAnswered: false,
         dateAdded: dateStr
       };
-
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await savePersonalPrayerToDb(currentUserId, newEntry);
-        setIsDbLoading(false);
-      }
-
-      setPrayers(prev => [newEntry, ...prev]);
+      savePrayersToStorage([newEntry, ...prayers]);
     }
 
     setShowPrayerForm(false);
     setEditingPrayerId(null);
   };
 
-  const handleDeletePrayer = async (id: string) => {
+  const handleDeletePrayer = (id: string) => {
     if (window.confirm('정말 이 기도제목을 삭제하시겠습니까?')) {
-      if (!isGuest && currentUserId) {
-        setIsDbLoading(true);
-        await deletePersonalPrayerFromDb(id);
-        setIsDbLoading(false);
-      }
-      setPrayers(prev => prev.filter(item => item.id !== id));
+      const updated = prayers.filter(item => item.id !== id);
+      savePrayersToStorage(updated);
     }
   };
 
-  const handleToggleAnswered = async (id: string) => {
+  const handleToggleAnswered = (id: string) => {
     const today = new Date();
     const dateStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-    
-    let updatedEntry: PrayerEntry | null = null;
     const updated = prayers.map(item => {
       if (item.id === id) {
         const nextAnswered = !item.isAnswered;
-        updatedEntry = {
+        return {
           ...item,
           isAnswered: nextAnswered,
           answeredDate: nextAnswered ? dateStr : undefined
         };
-        return updatedEntry;
       }
       return item;
     });
-
-    if (updatedEntry && !isGuest && currentUserId) {
-      setIsDbLoading(true);
-      await savePersonalPrayerToDb(currentUserId, updatedEntry);
-      setIsDbLoading(false);
-    }
-
-    setPrayers(updated);
+    savePrayersToStorage(updated);
   };
 
   // --- PERSONAL VERSE SUBMIT ---
@@ -357,22 +308,14 @@ export default function PersonalFaithNote({
 
   return (
     <div className="space-y-6" id="personal-faith-notebook">
-      {isDbLoading && (
-        <div className="fixed inset-0 bg-white/40 backdrop-blur-xs flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white p-6 rounded-2xl border border-[#E9E3D8] shadow-lg flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-3 border-[#8A9A5B]/30 border-t-[#8A9A5B] rounded-full animate-spin"></div>
-            <p className="text-xs font-bold text-[#8A9A5B]">데이터 동기화 중...</p>
-          </div>
-        </div>
-      )}
-
       {isGuest && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-900 shadow-xs animate-fadeIn">
           <span className="text-xl">⚠️</span>
           <div className="space-y-1 text-xs">
             <h4 className="font-bold font-serif text-[#5A5A40]">체험 중인 게스트 모드 안내</h4>
-            <p className="text-[#7A7A6A] leading-relaxed" style={{ wordBreak: 'keep-all' }}>
-              현재 게스트 모드로 이용 중입니다. 작성한 내용은 저장되지 않으며 새로고침 또는 로그아웃 시 모두 삭제됩니다. 로그인하면 암송 기록, 신앙노트, 기도제목 등을 안전하게 저장하고 이어서 이용할 수 있습니다.
+            <p className="text-[#7A7A6A] leading-relaxed">
+              현재 <strong>게스트(체험) 모드</strong>로 이용 중이십니다. 작성하시는 모든 설교/묵상 노트, 나만의 암송구절 및 기도제목은 <strong>브라우저를 새로고침하거나 로그아웃 시 즉시 삭제</strong>됩니다. 
+              소중한 신앙 성장 데이터를 정식으로 저장하고 동기화하시려면 오른쪽 위 <strong>로그아웃</strong> 후 개별 성도 가입을 완료해 주세요!
             </p>
           </div>
         </div>
@@ -586,7 +529,7 @@ export default function PersonalFaithNote({
             {journals.length === 0 ? (
               <div className="bg-white border border-dashed border-[#E9E3D8] rounded-3xl p-12 text-center space-y-3">
                 <BookOpen className="w-8 h-8 text-[#A0A090] mx-auto opacity-60" />
-                <p className="text-sm font-medium text-[#7A7A6A]">등록된 내용이 없습니다.</p>
+                <p className="text-sm font-medium text-[#7A7A6A]">기록된 신앙 노트가 없습니다.</p>
                 <p className="text-xs text-[#A0A090]">우측 상단의 '새 노트 쓰기'를 클릭해 설교 메모나 말씀 묵상을 남겨보세요.</p>
               </div>
             ) : (
@@ -812,7 +755,7 @@ export default function PersonalFaithNote({
             {personalVerses.length === 0 ? (
               <div className="bg-white border border-dashed border-[#E9E3D8] rounded-3xl p-12 text-center col-span-2 space-y-3">
                 <Bookmark className="w-8 h-8 text-[#A0A090] mx-auto opacity-60" />
-                <p className="text-sm font-medium text-[#7A7A6A]">등록된 내용이 없습니다.</p>
+                <p className="text-sm font-medium text-[#7A7A6A]">등록된 개인 암송 성구가 없습니다.</p>
                 <p className="text-xs text-[#A0A090]">개인적으로 은혜를 입어 평생 마음에 새기고 싶은 구절을 등록해 자유롭게 암송 연습을 해보세요.</p>
               </div>
             ) : (
@@ -1022,7 +965,7 @@ export default function PersonalFaithNote({
             {prayers.length === 0 ? (
               <div className="bg-white border border-dashed border-[#E9E3D8] rounded-3xl p-12 text-center col-span-2 space-y-3">
                 <Heart className="w-8 h-8 text-[#A0A090] mx-auto opacity-60" />
-                <p className="text-sm font-medium text-[#7A7A6A]">등록된 내용이 없습니다.</p>
+                <p className="text-sm font-medium text-[#7A7A6A]">등록된 기도제목이 없습니다.</p>
                 <p className="text-xs text-[#A0A090]">마음의 소원과 영적 중보의 기도를 심고, 주님의 신실한 응답을 기록해 보세요.</p>
               </div>
             ) : (

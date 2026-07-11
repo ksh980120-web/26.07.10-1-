@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BookMarked, ShieldCheck, UserPlus, LogIn, Sparkles, X, Heart } from 'lucide-react';
-import { appSignIn, appSignUp, isSupabaseConfigured, AppUser, supabase } from '../lib/supabase';
+import { AppUser, AppRole, supabase } from '../lib/supabase';
 
 interface MainLandingProps {
   onStart: (user: AppUser) => void;
@@ -12,9 +12,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [errorMsg, setErrorMsg] = useState(() => {
-    return !isSupabaseConfigured ? '현재 서버에 연결할 수 없습니다.' : '';
-  });
+  const [errorMsg, setErrorMsg] = useState('');
   const [showFindModal, setShowFindModal] = useState(false);
   const [findResult, setFindResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -36,11 +34,47 @@ export default function MainLanding({ onStart }: MainLandingProps) {
     try {
       if (isLogin) {
         // Sign In
-        const { user, error } = await appSignIn(email, password);
+        const trimmedEmail = email.trim();
+        const loginEmail = trimmedEmail === 'test' ? 'test@church.com' : trimmedEmail;
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: loginEmail,
+          password
+        });
+
         if (error) {
-          setErrorMsg(error);
-        } else if (user) {
-          onStart(user);
+          console.log("- Supabase URL:", (import.meta as any).env.VITE_SUPABASE_URL);
+          console.log("- URL 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_URL);
+          console.log("- KEY 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_ANON_KEY);
+          console.log("- createClient 생성 여부:", !!supabase);
+          console.log("- 실제 Supabase 응답:", { error, data });
+
+          setErrorMsg(error.message);
+        } else if (data?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          let resolvedRole: AppRole = 'member';
+          if (profile && profile.role) {
+            resolvedRole = profile.role as AppRole;
+          }
+
+          if (loginEmail === 'test@church.com' || resolvedRole === 'guest') {
+            resolvedRole = 'guest';
+          }
+
+          const appUser: AppUser = {
+            id: data.user.id,
+            email: data.user.email || loginEmail,
+            name: profile?.name || data.user.user_metadata?.name || '성도',
+            role: resolvedRole,
+            phone: profile?.phone || data.user.user_metadata?.phone || ''
+          };
+
+          onStart(appUser);
         }
       } else {
         // Sign Up
@@ -55,11 +89,48 @@ export default function MainLanding({ onStart }: MainLandingProps) {
           return;
         }
 
-        const { user, error } = await appSignUp(name.trim(), phone.trim(), email.trim(), password);
+        const trimmedEmail = email.trim();
+
+        const { data, error } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: {
+            data: { name: name.trim(), phone: phone.trim() }
+          }
+        });
+
         if (error) {
-          setErrorMsg(error);
-        } else if (user) {
-          onStart(user);
+          console.log("- Supabase URL:", (import.meta as any).env.VITE_SUPABASE_URL);
+          console.log("- URL 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_URL);
+          console.log("- KEY 존재 여부:", !!(import.meta as any).env.VITE_SUPABASE_ANON_KEY);
+          console.log("- createClient 생성 여부:", !!supabase);
+          console.log("- 실제 Supabase 응답:", { error, data });
+
+          setErrorMsg(error.message);
+        } else if (data?.user) {
+          const role: AppRole = 'member';
+
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              email: trimmedEmail,
+              name: name.trim(),
+              phone: phone.trim(),
+              role,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          } catch (profileErr) {
+            console.error("Profile upsert during sign up failed:", profileErr);
+          }
+
+          onStart({
+            id: data.user.id,
+            email: trimmedEmail,
+            name: name.trim(),
+            role,
+            phone: phone.trim()
+          });
         }
       }
     } catch (err: any) {
@@ -343,7 +414,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                 const nameVal = (form.elements[0] as HTMLInputElement).value.trim();
                 const phoneVal = (form.elements[1] as HTMLInputElement).value.trim();
                 
-                if (!isSupabaseConfigured || !supabase) {
+                if (!supabase) {
                   setFindResult("현재 서버에 연결할 수 없어 계정을 조회할 수 없습니다.");
                   return;
                 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, TrendingUp, ArrowUpDown, Search, Award, Plus, Trash2, FileSpreadsheet, Check, RefreshCw, Lock, Inbox, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { SaintProgress, VerseSubmission } from '../types';
-import { fetchSaintsProgressFromDb, saveSaintProgressToDb, deleteSaintFromDb, isSupabaseConfigured, fetchSubmissions, updateSubmissionStatus, supabase } from '../lib/supabase';
+import { fetchSaintsProgressFromDb, saveSaintProgressToDb, deleteSaintFromDb, fetchSubmissions, updateSubmissionStatus, supabase } from '../lib/supabase';
 
 interface PastorAdminPanelProps {
   totalVersesCount: number;
@@ -59,7 +59,7 @@ export default function PastorAdminPanel({ totalVersesCount, currentUserRole = '
     loadSubmissionsList();
 
     // Setup Realtime listener for submissions table
-    if (isSupabaseConfigured && supabase) {
+    if (supabase) {
       const channel = supabase
         .channel('realtime-submissions-pastor')
         .on(

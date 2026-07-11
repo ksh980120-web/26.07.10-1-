@@ -55,7 +55,6 @@ import {
   savePrayerToDb,
   deletePrayerFromDb,
   updateSaintCompletedCountInDb,
-  isSupabaseConfigured,
   AppUser,
   fetchLessonsFromDb,
   saveLessonToDb,
@@ -64,11 +63,11 @@ import {
   saveAnnouncementToDb,
   deleteAnnouncementFromDb,
   onAuthStateChange,
-  appSignOut,
   submitVerseToPastor,
   fetchSubmissions,
   updateSubmissionStatus,
-  fetchUserSubmissions
+  fetchUserSubmissions,
+  supabase
 } from './lib/supabase';
 
 export default function App() {
@@ -1098,7 +1097,7 @@ export default function App() {
             {/* MAIN LOGOUT BUTTON */}
             <button
               onClick={async () => {
-                await appSignOut();
+                await supabase.auth.signOut();
                 setIsAuthenticated(false);
                 setUserRole(null);
                 setIsAdminAuthenticated(false);
@@ -1117,14 +1116,6 @@ export default function App() {
           </div>
         </div>
       </header>
-
-      {!isSupabaseConfigured && (
-        <div className="bg-rose-50 border-b border-rose-200 py-3 px-4 text-center text-rose-800 text-xs font-bold font-sans flex items-center justify-center gap-2" id="supabase-disconnect-banner">
-          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-          현재 서버에 연결할 수 없습니다.
-        </div>
-      )}
-
       {/* MAIN LAYOUT WRAPPER */}
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8" id="main-content-layout">
         

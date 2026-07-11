@@ -590,10 +590,11 @@ export default function App() {
 
   // Delete verse
   const handleDeleteVerse = async (id: string) => {
+    const isPersonal = verses.find(v => v.id === id)?.isPersonal;
     const updated = verses.filter(v => v.id !== id);
     saveVerses(updated);
 
-    if (isAdminAuthenticated) {
+    if (isAdminAuthenticated || (isPersonal && userRole !== 'guest')) {
       await deleteVerseFromDb(id);
     }
 
@@ -727,7 +728,7 @@ export default function App() {
     setShowManager(false);
   };
 
-  const handleAddPersonalVerse = (newVerseData: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => {
+  const handleAddPersonalVerse = async (newVerseData: Omit<Verse, 'id' | 'isPersonal' | 'quarter' | 'week'>) => {
     const newVerse: Verse = {
       ...newVerseData,
       id: `verse-personal-${Date.now()}`,
@@ -737,6 +738,10 @@ export default function App() {
     };
     const updated = [...verses, newVerse];
     saveVerses(updated);
+
+    if (userRole !== 'guest' && currentUserId) {
+      await saveVerseToDb(newVerse);
+    }
 
     // Initialize status
     const updatedStatuses = {

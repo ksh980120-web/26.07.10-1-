@@ -182,7 +182,8 @@ CREATE POLICY "Profiles SELECT policy" ON public.profiles
 
 CREATE POLICY "Profiles INSERT policy" ON public.profiles
     FOR INSERT WITH CHECK (
-        public.get_auth_user_role() = 'master'
+        auth.uid() = id
+        OR public.get_auth_user_role() = 'master'
     );
 
 CREATE POLICY "Profiles UPDATE policy" ON public.profiles
@@ -199,21 +200,28 @@ CREATE POLICY "Profiles DELETE policy" ON public.profiles
 
 -- [Weekly Verses Policies]
 CREATE POLICY "Weekly verses SELECT policy" ON public.weekly_verses
-    FOR SELECT USING (true);
+    FOR SELECT USING (
+        is_personal = false OR 
+        user_id = auth.uid() OR 
+        public.get_auth_user_role() IN ('master', 'pastor', 'admin')
+    );
 
 CREATE POLICY "Weekly verses INSERT policy" ON public.weekly_verses
     FOR INSERT WITH CHECK (
-        public.get_auth_user_role() IN ('master', 'pastor', 'admin')
+        public.get_auth_user_role() IN ('master', 'pastor', 'admin') OR
+        (is_personal = true AND user_id = auth.uid())
     );
 
 CREATE POLICY "Weekly verses UPDATE policy" ON public.weekly_verses
     FOR UPDATE USING (
-        public.get_auth_user_role() IN ('master', 'pastor', 'admin')
+        public.get_auth_user_role() IN ('master', 'pastor', 'admin') OR
+        (is_personal = true AND user_id = auth.uid())
     );
 
 CREATE POLICY "Weekly verses DELETE policy" ON public.weekly_verses
     FOR DELETE USING (
-        public.get_auth_user_role() IN ('master', 'pastor', 'admin')
+        public.get_auth_user_role() IN ('master', 'pastor', 'admin') OR
+        (is_personal = true AND user_id = auth.uid())
     );
 
 

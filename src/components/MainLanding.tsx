@@ -15,6 +15,8 @@ export default function MainLanding({ onStart }: MainLandingProps) {
   const [errorMsg, setErrorMsg] = useState('');
   const [showFindModal, setShowFindModal] = useState(false);
   const [findResult, setFindResult] = useState('');
+  const [foundEmail, setFoundEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleStartGuest = () => {
@@ -134,7 +136,7 @@ export default function MainLanding({ onStart }: MainLandingProps) {
         }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || '요청 처리 중 문제가 발생했습니다.');
+      setErrorMsg(getKoreanErrorMessage(err.message || '요청 처리 중 문제가 발생했습니다.'));
     } finally {
       setIsLoading(false);
     }
@@ -385,6 +387,8 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                 onClick={() => {
                   setShowFindModal(false);
                   setFindResult('');
+                  setFoundEmail('');
+                  setResetSent(false);
                 }}
                 className="text-[#A0A090] hover:text-stone-700 transition"
               >
@@ -429,8 +433,10 @@ export default function MainLanding({ onStart }: MainLandingProps) {
                   );
 
                   if (found) {
-                    setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n\n※ 개인정보 보호 및 보안을 위해 비밀번호는 직접 제공되지 않습니다. 분실 시 목양실이나 말씀 암송 담당자분께 연락하여 비밀번호 재설정/초기화를 요청해 주세요.`);
+                    setFoundEmail(found.email);
+                    setFindResult(`조회 성공! 🎉\n\n성함: ${found.name}\n아이디(이메일): ${found.email}\n\n아래의 [비밀번호 재설정 이메일 받기] 버튼을 누르시면 해당 이메일로 비밀번호 재설정 링크를 발송해 드립니다.`);
                   } else {
+                    setFoundEmail('');
                     setFindResult(`등록된 성도 정보 없음 ❌\n\n입력하신 성함(${nameVal})과 연락처(${phoneVal})로 일치하는 가입 정보를 찾지 못했습니다.\n\n정확한 본명과 전화번호를 기입해 보시거나 새로 가입해 주세요.`);
                   }
                 } catch (err: any) {
@@ -470,6 +476,30 @@ export default function MainLanding({ onStart }: MainLandingProps) {
               <div className="p-3 bg-[#FDF6E2] border border-amber-200 rounded-lg text-[11px] text-amber-800 leading-relaxed whitespace-pre-line font-sans font-medium">
                 {findResult}
               </div>
+            )}
+
+            {foundEmail && !resetSent && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(foundEmail, {
+                      redirectTo: window.location.origin
+                    });
+                    if (error) {
+                      setFindResult(prev => prev + `\n\n비밀번호 재설정 메일 발송 실패: ${getKoreanErrorMessage(error.message)}`);
+                    } else {
+                      setResetSent(true);
+                      setFindResult(`비밀번호 재설정 링크 발송 성공! ✉️\n\n${foundEmail} 메일 수신함을 확인해 주세요. 메일에 담긴 링크를 클릭하여 비밀번호를 재설정하실 수 있습니다.`);
+                    }
+                  } catch (e: any) {
+                    setFindResult(prev => prev + `\n\n오류가 발생했습니다: ${getKoreanErrorMessage(e.message || '알 수 없는 오류')}`);
+                  }
+                }}
+                className="w-full py-2 bg-[#5A5A40] hover:bg-[#4A4A30] text-white text-xs font-bold rounded-lg transition text-center cursor-pointer"
+              >
+                비밀번호 재설정 이메일 받기
+              </button>
             )}
           </div>
         </div>

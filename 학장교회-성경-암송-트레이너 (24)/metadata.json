@@ -1,0 +1,6 @@
+{
+  "name": "만나 - 하나님과 만나는 달콤한 시간",
+  "description": "학장교회 매주 암송성구를 위한 사이트. 말씀으로 하나님과 매일 만나는 기적의 양식 '만나' 트레이너",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
